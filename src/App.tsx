@@ -569,7 +569,11 @@ function BookingModal({
    ---------------------------------------------------------- */
 export default function App() {
   const [headerScrolled, setHeaderScrolled] = useState(false)
-  const [adminMode, setAdminMode] = useState(() => isAdminModeEnabled())
+  const [, setAdminMode] = useState(() => isAdminModeEnabled())
+
+
+  // Keep this for /admin-vs-2024 routing decisions, but avoid rendering the full homepage there.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState<RoomData | null>(null)
@@ -734,36 +738,44 @@ export default function App() {
     return <AdminReservations />
   }
 
-  if (window.location.pathname === '/admin-vs-2024') {
-    // Show the real homepage, but with admin overlays enabled.
-    // Sync both localStorage and React state so toolbar renders immediately.
-    if (!isAdminModeEnabled()) {
-      try {
+  const isAdminVs2024 = window.location.pathname === '/admin-vs-2024'
+
+  // Dedicated render path for /admin-vs-2024 to avoid mounting the whole homepage.
+  if (isAdminVs2024) {
+    try {
+      if (!isAdminModeEnabled()) {
         localStorage.setItem('villa_susane_admin_session', 'true')
-        setAdminMode(true)
-      } catch {
-        // ignore
       }
-    } else {
-      // ensure state is also correct when already enabled
-      setAdminMode(true)
+    } catch {
+      // ignore
     }
+
+    return (
+      <div>
+        <AdminModeToolbar
+          onLogout={() => {
+            try {
+              localStorage.removeItem('villa_susane_admin_session')
+            } catch {
+              // ignore
+            }
+            setAdminMode(false)
+          }}
+        />
+        <AdminReservations />
+      </div>
+    )
   }
 
-  // Admin overlay toggle (admin-only)
-  const showAdminToolbar = adminMode && window.location.pathname === '/admin-vs-2024'
 
-
-  const adminToolbar = showAdminToolbar ? (
-    <AdminModeToolbar onLogout={() => setAdminMode(false)} />
-  ) : null
 
 
 
 
   return (
     <div>
-      {adminToolbar}
+      {/* adminToolbar handled in route-specific render above */}
+
 
       {/* ── Grain texture overlay ── */}
       <div className="grain-overlay" />
