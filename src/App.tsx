@@ -735,8 +735,15 @@ export default function App() {
   } as React.CSSProperties
 
   if (new URLSearchParams(window.location.search).get('key') === 'admin') {
-    return <AdminReservations />
+    // keep this route as a “copy of the website” admin dashboard
+    // (no reservation table) per expected behavior.
+    try {
+      localStorage.setItem('villa_susane_admin_session', 'true')
+    } catch {
+      // ignore
+    }
   }
+
 
   const isAdminVs2024 = window.location.pathname === '/admin-vs-2024'
 
