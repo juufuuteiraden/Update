@@ -1,0 +1,146 @@
+.room-card--add-placeholder{
+  background: rgba(255,255,255,0.7);
+  border: 1px dashed rgba(0,109,119,0.35);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.room-card--add-placeholder:hover{
+  background: rgba(255,255,255,0.92);
+  border-color: rgba(0,109,119,0.55);
+  transform: translateY(-6px);
+}
+
+.room-card--add-placeholder-inner{
+  height: 100%;
+  min-height: 100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding: 1.25rem;
+}
+
+.room-card--add-icon{
+  width: 70px;
+  height: 70px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius: 18px;
+  background: rgba(0,109,119,0.06);
+  border: 1px solid rgba(0,109,119,0.14);
+  color: var(--teal);
+  margin-bottom: 0.75rem;
+}
+
+.room-card--add-label{
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--teal);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+}
+
+.rates-admin-room-form{
+  display:flex;
+  flex-direction:column;
+  gap: 0.9rem;
+}
+
+.rates-admin-field{
+  display:flex;
+  flex-direction:column;
+  gap: 0.35rem;
+  font-family: var(--font-body);
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.rates-admin-field input,
+.rates-admin-field textarea{
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(0,109,119,0.18);
+  background: rgba(255,253,247,1);
+  outline: none;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.rates-admin-field input:focus,
+.rates-admin-field textarea:focus{
+  border-color: rgba(0,109,119,0.55);
+  box-shadow: 0 0 0 4px rgba(0,109,119,0.10);
+  transform: translateY(-1px);
+}
+
+.rates-admin-field input::file-selector-button{
+  border: 1px solid rgba(0,109,119,0.18);
+  background: rgba(0,109,119,0.06);
+  color: var(--teal);
+  padding: 0.55rem 0.8rem;
+  border-radius: 12px;
+  margin-right: 0.6rem;
+  cursor: pointer;
+}
+
+.rates-admin-room-form input[type="file"]{
+  padding: 0.75rem 0.75rem;
+}
+
+
+.rates-admin-field textarea{ resize: vertical; }
+
+.rates-admin-modal-cancel{
+  padding: 0.85rem 1.05rem;
+  border-radius: 14px;
+  border: 1px solid rgba(0,109,119,0.25);
+  background: rgba(255,255,255,0.6);
+  color: var(--teal);
+  font-family: var(--font-body);
+  cursor:pointer;
+}
+
+.rates-admin-modal-primary{
+  padding: 0.85rem 1.15rem;
+  border-radius: 14px;
+  border: 1px solid var(--teal);
+  background: var(--teal);
+  color: var(--white);
+  font-family: var(--font-body);
+  cursor:pointer;
+}
+
+.room-admin-actions{
+  display:flex;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.room-admin-actions button{
+  flex: 1;
+  padding: 0.65rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(0,109,119,0.2);
+  background: rgba(0,109,119,0.06);
+  color: var(--teal);
+  font-family: var(--font-body);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.room-admin-actions button:last-child{
+  border-color: rgba(190,40,40,0.26);
+  background: rgba(190,40,40,0.08);
+  color: #9f2424;
+}
+
+.room-admin-actions button:hover{
+  transform: translateY(-1px);
+}
+

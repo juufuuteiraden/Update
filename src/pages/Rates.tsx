@@ -1,5 +1,6 @@
 export type RateRoom = {
   id: number
+  dbId?: string
   name: string
   description: string
   price: string
@@ -14,6 +15,24 @@ export type RateRoom = {
 import { useEffect, useState } from 'react'
 import { client } from '../sanityClient'
 import './Rates.css'
+import './RatesAdminPlaceholder.css'
+import { supabase } from '../supabaseClient'
+import type { RoomItem } from '../supabaseTypes'
+import { isAdminModeEnabled } from '../utils/adminMode'
+import AdminModal from '../components/admin/AdminModal'
+
+type RoomDraft = {
+  name: string
+  description: string
+  featuresText: string
+  price: string
+  guests: string
+}
+
+
+
+
+
 
 type RatesContent = {
   walkInEyebrow: string
@@ -39,6 +58,150 @@ export default function Rates({
   rooms: RateRoom[]
   onBook: (room: RateRoom) => void
 }) {
+  // Admin controls are enabled by /admin-vs-2024 + localStorage toggle
+  const showAdmin = isAdminModeEnabled()
+
+  
+  const [adminModalOpen, setAdminModalOpen] = useState(false)
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null)
+  const [roomDraft, setRoomDraft] = useState<RoomDraft>({ name: '', description: '', featuresText: '', price: '', guests: '' })
+  const [roomDraftImage, setRoomDraftImage] = useState<File | null>(null)
+  const [savingRoom, setSavingRoom] = useState(false)
+
+  const resetRoomDraft = () => {
+    setEditingRoomId(null)
+    setRoomDraft({ name: '', description: '', featuresText: '', price: '', guests: '' })
+    setRoomDraftImage(null)
+  }
+
+
+
+
+  const BUCKET = 'villa-images'
+
+
+  const fileName = (file: File) =>
+    `${Date.now()}-${file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-')}`
+
+  const uploadImage = async (file: File) => {
+    const path = fileName(file)
+
+    try {
+      const { error } = await supabase.storage.from(BUCKET).upload(path, file)
+      if (error) throw error
+      const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
+      return publicUrl
+    } catch (err) {
+      throw err
+    }
+  }
+
+  const textToList = (value: string) =>
+    value
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean)
+
+  const loadRoomsOnce = async () => {
+    // Reuse the existing realtime loader by doing a small fetch and mapping inline.
+    const { data, error } = await supabase
+      .from('rooms')
+      .select('id,name,description,image_url,features,price,guests')
+
+
+    if (error || !data?.length) return
+
+    setCmsRooms(
+      data.map((room: RoomItem, index: number) => {
+        const fallbackRoom = hotelRooms[index % hotelRooms.length]
+        const features = Array.isArray(room.features) ? room.features : []
+
+        return {
+          ...fallbackRoom,
+          id: index + 101,
+          dbId: room.id,
+          name: room.name,
+          description: room.description,
+          price: room.price ? `PHP ${room.price.toLocaleString()}` : fallbackRoom.price,
+          guests: room.guests ? `${room.guests} guests` : fallbackRoom.guests,
+          image: room.image_url || fallbackRoom.image,
+          images: [
+            {
+              url: room.image_url || fallbackRoom.image,
+              label: room.name,
+            },
+          ],
+          inclusions: features.length
+            ? features.map((feature) => ({ icon: '', label: 'Feature', value: feature }))
+            : fallbackRoom.inclusions,
+        }
+      }),
+    )
+  }
+
+  const saveRoom = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!editingRoomId && !roomDraftImage) return
+
+    setSavingRoom(true)
+    try {
+      const currentRoom = cmsRooms.find((room) => room.dbId === editingRoomId)
+      const imageUrl = roomDraftImage ? await uploadImage(roomDraftImage) : currentRoom?.image || ''
+      const payload = {
+        name: roomDraft.name,
+        description: roomDraft.description,
+        image_url: imageUrl,
+        features: textToList(roomDraft.featuresText),
+        price: Number(roomDraft.price) || 0,
+        guests: Number(String(roomDraft.guests).replace(/[^0-9]/g, '')) || 0,
+      }
+      const { error } = editingRoomId
+        ? await supabase.from('rooms').update(payload).eq('id', editingRoomId)
+        : await supabase.from('rooms').insert(payload)
+
+      if (error) throw error
+
+      setAdminModalOpen(false)
+      resetRoomDraft()
+      await loadRoomsOnce()
+    } catch (err) {
+      // keep it simple for now: alert for visibility
+      alert(err instanceof Error ? err.message : 'Unable to save room')
+    } finally {
+      setSavingRoom(false)
+    }
+  }
+
+  const openAddRoom = () => {
+    resetRoomDraft()
+    setAdminModalOpen(true)
+  }
+
+  const openEditRoom = (room: RateRoom) => {
+    if (!room.dbId) return
+    setEditingRoomId(room.dbId)
+    setRoomDraft({
+      name: room.name,
+      description: room.description,
+      featuresText: (room.inclusions || []).map((item) => item.value).join('\n'),
+      price: room.price.replace(/[^0-9]/g, ''),
+      guests: room.guests,
+    })
+    setRoomDraftImage(null)
+    setAdminModalOpen(true)
+  }
+
+  const deleteRoom = async (room: RateRoom) => {
+    if (!room.dbId) return
+    if (!window.confirm('Delete this room?')) return
+    const { error } = await supabase.from('rooms').delete().eq('id', room.dbId)
+    if (error) alert(error.message)
+  }
+
+  const closeAddRoom = () => {
+    setAdminModalOpen(false)
+  }
+
   const [activeImageIndex, setActiveImageIndex] = useState<Record<number, number>>({})
   const [content, setContent] = useState<RatesContent>(fallbackRatesContent)
   const [walkInRates, setWalkInRates] = useState<RateRoom[]>([])
@@ -204,6 +367,57 @@ export default function Rates({
 
     return () => {
       isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadRooms = async () => {
+      const { data, error } = await supabase
+        .from('rooms')
+      .select('id,name,description,image_url,features,price,guests')
+
+      if (!isMounted || error || !data?.length) return
+
+      setCmsRooms(
+        data.map((room: RoomItem, index) => {
+          const fallbackRoom = hotelRooms[index % hotelRooms.length]
+          const features = Array.isArray(room.features) ? room.features : []
+
+          return {
+            ...fallbackRoom,
+            id: index + 101,
+            dbId: room.id,
+            name: room.name,
+            description: room.description,
+            price: room.price ? `PHP ${room.price.toLocaleString()}` : fallbackRoom.price,
+            guests: room.guests ? `${room.guests} guests` : fallbackRoom.guests,
+            image: room.image_url || fallbackRoom.image,
+            images: [
+              {
+                url: room.image_url || fallbackRoom.image,
+                label: room.name,
+              },
+            ],
+            inclusions: features.length
+              ? features.map((feature) => ({ icon: '', label: 'Feature', value: feature }))
+              : fallbackRoom.inclusions,
+          }
+        }),
+      )
+    }
+
+    loadRooms()
+
+    const channel = supabase
+      .channel('public-rooms')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, loadRooms)
+      .subscribe()
+
+    return () => {
+      isMounted = false
+      supabase.removeChannel(channel)
     }
   }, [])
 
@@ -384,6 +598,13 @@ export default function Rates({
                       </div>
                     )}
 
+                    {showAdmin && room.dbId && (
+                      <div className="room-admin-actions">
+                        <button type="button" onClick={() => openEditRoom(room)}>Edit</button>
+                        <button type="button" onClick={() => deleteRoom(room)}>Delete</button>
+                      </div>
+                    )}
+
                     <button className="book-button" onClick={() => onBook(room)}>
                       <span>Inquire</span>
                       <svg className="button-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -397,6 +618,97 @@ export default function Rates({
           </div>
         </div>
       </div>
+
+      <AdminModal
+        title={editingRoomId ? 'Edit Room' : 'Add Room'}
+        open={adminModalOpen}
+        onClose={closeAddRoom}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <button
+              type="button"
+              className="rates-admin-modal-cancel"
+              onClick={closeAddRoom}
+              disabled={savingRoom}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="rates-admin-modal-primary" form="rates-add-room-form" disabled={savingRoom}>
+              {savingRoom ? 'Saving...' : editingRoomId ? 'Update Room' : 'Add Room'}
+            </button>
+          </div>
+        }
+      >
+        <form id="rates-add-room-form" onSubmit={saveRoom} className="rates-admin-room-form">
+          <label className="rates-admin-field">
+            <span>Room name</span>
+            <input
+              required
+              value={roomDraft.name}
+              onChange={(e) => setRoomDraft({ ...roomDraft, name: e.target.value })}
+              placeholder="e.g. Garden Room"
+            />
+          </label>
+
+          <label className="rates-admin-field">
+            <span>Description</span>
+            <textarea
+              required
+              rows={4}
+              value={roomDraft.description}
+              onChange={(e) => setRoomDraft({ ...roomDraft, description: e.target.value })}
+              placeholder="Short description"
+            />
+          </label>
+
+          <label className="rates-admin-field">
+            <span>Features (one per line)</span>
+            <textarea
+              rows={5}
+              value={roomDraft.featuresText}
+              onChange={(e) => setRoomDraft({ ...roomDraft, featuresText: e.target.value })}
+              placeholder="e.g. King bed\nHot/Cold shower\nBalcony access"
+            />
+          </label>
+
+          <label className="rates-admin-field">
+            <span>Price (per night)</span>
+            <input
+              required
+              inputMode="numeric"
+              placeholder="e.g. 5000"
+              value={roomDraft.price}
+              onChange={(e) => setRoomDraft({ ...roomDraft, price: e.target.value })}
+            />
+          </label>
+
+          <label className="rates-admin-field">
+            <span>Guests</span>
+            <input
+              required
+              placeholder="e.g. 2-4 guests"
+              value={roomDraft.guests}
+              onChange={(e) => setRoomDraft({ ...roomDraft, guests: e.target.value })}
+            />
+          </label>
+
+          <label className="rates-admin-field">
+            <span>Main image</span>
+            <input
+              type="file"
+              accept="image/*"
+              required={!editingRoomId}
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null
+                setRoomDraftImage(file)
+              }}
+            />
+          </label>
+
+        </form>
+      </AdminModal>
+
     </section>
   )
 }
+
