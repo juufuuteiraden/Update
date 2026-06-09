@@ -172,11 +172,6 @@ export default function Rates({
     }
   }
 
-  const openAddRoom = () => {
-    resetRoomDraft()
-    setAdminModalOpen(true)
-  }
-
   const openEditRoom = (room: RateRoom) => {
     if (!room.dbId) return
     setEditingRoomId(room.dbId)

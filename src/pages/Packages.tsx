@@ -141,11 +141,6 @@ export default function Packages({
     setPackageDraft({ name: '', price: '', inclusions: '', highlighted: false })
   }
 
-  const openAddPackage = () => {
-    resetPackageDraft()
-    setPackageModalOpen(true)
-  }
-
   const openEditPackage = (pkg: PackageData) => {
     if (!pkg.id) return
     setEditingPackageId(pkg.id)
