@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { client } from '../sanityClient'
 import './ReviewsSection.css'
+import { supabase } from '../supabaseClient'
+import type { ReviewItem } from '../supabaseTypes'
 
 type Review = {
   quote: string
@@ -8,6 +10,7 @@ type Review = {
   author: string
   proofImage: string
   detail: string
+  rating?: number
 }
 
 type ReviewsContent = {
@@ -114,6 +117,44 @@ export default function ReviewsSection() {
     }
   }, [])
 
+  useEffect(() => {
+    let isMounted = true
+
+    const loadReviews = async () => {
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('id,guest_name,event_type,rating,quote')
+
+      if (!isMounted || error || !data?.length) return
+
+      setReviews(
+        data.map((review: ReviewItem, index) => {
+          const fallback = fallbackReviews[index % fallbackReviews.length]
+          return {
+            quote: review.quote,
+            context: review.event_type,
+            author: review.guest_name,
+            detail: review.quote,
+            rating: review.rating,
+            proofImage: fallback.proofImage,
+          }
+        }),
+      )
+    }
+
+    loadReviews()
+
+    const channel = supabase
+      .channel('public-reviews')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, loadReviews)
+      .subscribe()
+
+    return () => {
+      isMounted = false
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
   const filters = ['All', ...Array.from(new Set(reviews.map(r => r.context)))]
   
   const filteredReviews = activeFilter === 'All' 
@@ -196,7 +237,7 @@ export default function ReviewsSection() {
                   <span className="review-context" data-sanity="review.context">{review.context}</span>
                   <div className="review-stars">
                     {[...Array(5)].map((_, i) => (
-                      <svg key={i} width="12" height="12" viewBox="0 0 24 24" fill="#FFB800">
+                      <svg key={i} width="12" height="12" viewBox="0 0 24 24" fill={i < (review.rating ?? 5) ? '#FFB800' : 'rgba(255,184,0,0.22)'}>
                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                       </svg>
                     ))}

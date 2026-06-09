@@ -1,0 +1,236 @@
+.admin-login-screen,
+.admin-shell {
+  min-height: 100vh;
+  background: #101818;
+  color: #fffdf7;
+  font-family: Inter, sans-serif;
+}
+
+.admin-login-screen {
+  display: grid;
+  place-items: center;
+}
+
+.admin-login-card {
+  width: 380px;
+  padding: 2.25rem;
+  background: rgba(255, 253, 247, 0.06);
+  border: 1px solid rgba(255, 253, 247, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+
+.admin-login-card span,
+.admin-kicker {
+  color: #ff8360;
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.admin-login-card h1,
+.admin-sidebar h1,
+.admin-header h2 {
+  margin: 0.35rem 0 1.5rem;
+  font-family: Poppins, sans-serif;
+  font-weight: 300;
+}
+
+.admin-login-card input,
+.admin-form input,
+.admin-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 253, 247, 0.14);
+  background: rgba(255, 253, 247, 0.08);
+  color: #fffdf7;
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.85rem;
+  font: inherit;
+}
+
+.admin-login-card input::placeholder,
+.admin-form input::placeholder,
+.admin-form textarea::placeholder {
+  color: rgba(255, 253, 247, 0.55);
+}
+
+.admin-login-card p {
+  color: #ff8360;
+  margin: 0 0 0.85rem;
+}
+
+.admin-login-card button,
+.admin-form button,
+.admin-upload,
+.admin-list button,
+.admin-gallery-item button,
+.admin-logout {
+  border: 0;
+  border-radius: 6px;
+  background: #ff8360;
+  color: #101818;
+  padding: 0.85rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-shell {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.admin-sidebar {
+  padding: 2rem;
+  border-right: 1px solid rgba(255, 253, 247, 0.1);
+  background: #0c1313;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.admin-sidebar nav {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.admin-sidebar nav button {
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255, 253, 247, 0.72);
+  padding: 0.85rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.admin-sidebar nav button.active,
+.admin-sidebar nav button:hover {
+  border-color: rgba(255, 131, 96, 0.45);
+  background: rgba(255, 131, 96, 0.12);
+  color: #fffdf7;
+}
+
+.admin-logout {
+  margin-top: auto;
+  background: rgba(255, 253, 247, 0.1);
+  color: #fffdf7;
+}
+
+.admin-content {
+  padding: 2rem;
+  overflow: auto;
+}
+
+.admin-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.admin-message {
+  background: rgba(42, 157, 143, 0.18);
+  border: 1px solid rgba(42, 157, 143, 0.38);
+  color: #fffdf7;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+}
+
+.admin-panel,
+.admin-two-column {
+  background: rgba(255, 253, 247, 0.045);
+  border: 1px solid rgba(255, 253, 247, 0.1);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.admin-upload {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.admin-upload input {
+  display: none;
+}
+
+.admin-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.admin-gallery-item,
+.admin-list article {
+  background: rgba(255, 253, 247, 0.07);
+  border: 1px solid rgba(255, 253, 247, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.admin-gallery-item img,
+.admin-list article img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-gallery-item div,
+.admin-list article {
+  padding: 1rem;
+}
+
+.admin-gallery-item div,
+.admin-list article div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.admin-two-column {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 1.25rem;
+}
+
+.admin-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-list article strong,
+.admin-list article span {
+  display: block;
+}
+
+.admin-list article span,
+.admin-list article p {
+  color: rgba(255, 253, 247, 0.68);
+}
+
+.admin-list button,
+.admin-gallery-item button {
+  padding: 0.55rem 0.75rem;
+}
+
+.admin-list button:last-child,
+.admin-gallery-item button {
+  background: rgba(255, 253, 247, 0.12);
+  color: #fffdf7;
+}
+
+.admin-check {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+}
+
+.admin-check input {
+  width: auto;
+  margin: 0;
+}
+

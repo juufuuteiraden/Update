@@ -1,8 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { client } from '../sanityClient';
 import './Packages.css';
+import { supabase } from '../supabaseClient';
+import type { PackageItem } from '../supabaseTypes';
+import { isAdminModeEnabled } from '../utils/adminMode';
+import AdminModal from '../components/admin/AdminModal';
 
 interface PackageData {
+  id?: string
   title: string
   description: string
   price: string
@@ -10,6 +15,14 @@ interface PackageData {
   images: string[]
   badge?: string
   includes?: string[]
+  highlighted?: boolean
+}
+
+type PackageDraft = {
+  name: string
+  price: string
+  inclusions: string
+  highlighted: boolean
 }
 
 type PackagesContent = {
@@ -29,6 +42,12 @@ export default function Packages({
 }: {
   onAskAboutThis: () => void
 }) {
+  const showAdmin = isAdminModeEnabled()
+  const [packageModalOpen, setPackageModalOpen] = useState(false)
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null)
+  const [savingPackage, setSavingPackage] = useState(false)
+  const [packageDraft, setPackageDraft] = useState<PackageDraft>({ name: '', price: '', inclusions: '', highlighted: false })
+
   const fallbackPackages: PackageData[] = [
      {
       title: 'Phase 1 Area Package',
@@ -111,6 +130,62 @@ export default function Packages({
   const [content, setContent] = useState<PackagesContent>(fallbackPackagesContent)
   const [packages, setPackages] = useState<PackageData[]>(fallbackPackages)
 
+  const textToList = (value: string) =>
+    value
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean)
+
+  const resetPackageDraft = () => {
+    setEditingPackageId(null)
+    setPackageDraft({ name: '', price: '', inclusions: '', highlighted: false })
+  }
+
+  const openAddPackage = () => {
+    resetPackageDraft()
+    setPackageModalOpen(true)
+  }
+
+  const openEditPackage = (pkg: PackageData) => {
+    if (!pkg.id) return
+    setEditingPackageId(pkg.id)
+    setPackageDraft({
+      name: pkg.title,
+      price: pkg.price,
+      inclusions: (pkg.includes || []).join('\n'),
+      highlighted: Boolean(pkg.highlighted),
+    })
+    setPackageModalOpen(true)
+  }
+
+  const savePackage = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSavingPackage(true)
+    const payload = {
+      name: packageDraft.name,
+      price: packageDraft.price,
+      inclusions: textToList(packageDraft.inclusions),
+      highlighted: packageDraft.highlighted,
+    }
+    const { error } = editingPackageId
+      ? await supabase.from('packages').update(payload).eq('id', editingPackageId)
+      : await supabase.from('packages').insert(payload)
+    setSavingPackage(false)
+    if (error) {
+      alert(error.message)
+      return
+    }
+    resetPackageDraft()
+    setPackageModalOpen(false)
+  }
+
+  const deletePackage = async (pkg: PackageData) => {
+    if (!pkg.id) return
+    if (!window.confirm('Delete this package?')) return
+    const { error } = await supabase.from('packages').delete().eq('id', pkg.id)
+    if (error) alert(error.message)
+  }
+
   useEffect(() => {
     let isMounted = true
 
@@ -166,6 +241,45 @@ export default function Packages({
 
     return () => {
       isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadPackages = async () => {
+      const { data, error } = await supabase
+        .from('packages')
+        .select('id,name,price,inclusions,highlighted')
+
+      if (!isMounted || error || !data?.length) return
+
+      setPackages(
+        data.map((pkg: PackageItem, index) => {
+          const fallback = fallbackPackages[index % fallbackPackages.length]
+          return {
+            ...fallback,
+            id: pkg.id,
+            title: pkg.name,
+            price: pkg.price,
+            badge: pkg.highlighted ? 'Featured' : fallback.badge,
+            includes: Array.isArray(pkg.inclusions) && pkg.inclusions.length ? pkg.inclusions : fallback.includes,
+            highlighted: pkg.highlighted,
+          }
+        }),
+      )
+    }
+
+    loadPackages()
+
+    const channel = supabase
+      .channel('public-packages')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, loadPackages)
+      .subscribe()
+
+    return () => {
+      isMounted = false
+      supabase.removeChannel(channel)
     }
   }, [])
 
@@ -315,7 +429,7 @@ export default function Packages({
         <div className="packages-grid">
           {packages.map((pkg, index) => (
             <div
-              key={pkg.title}
+              key={pkg.id || pkg.title}
               className="package-card-wrapper reveal"
               style={{ animationDelay: `${index * 0.12}s` }}
             >
@@ -355,12 +469,59 @@ export default function Packages({
                       <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   </button>
+
+                  {showAdmin && pkg.id && (
+                    <div className="package-admin-actions">
+                      <button type="button" onClick={() => openEditPackage(pkg)}>Edit</button>
+                      <button type="button" onClick={() => deletePackage(pkg)}>Delete</button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           ))}
         </div>
       </div>
+
+      <AdminModal
+        title={editingPackageId ? 'Edit Package' : 'Add Package'}
+        open={packageModalOpen}
+        onClose={() => setPackageModalOpen(false)}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <button
+              type="button"
+              className="rates-admin-modal-cancel"
+              onClick={() => setPackageModalOpen(false)}
+              disabled={savingPackage}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="rates-admin-modal-primary" form="packages-admin-form" disabled={savingPackage}>
+              {savingPackage ? 'Saving...' : editingPackageId ? 'Update Package' : 'Add Package'}
+            </button>
+          </div>
+        }
+      >
+        <form id="packages-admin-form" onSubmit={savePackage} className="rates-admin-room-form">
+          <label className="rates-admin-field">
+            <span>Package name</span>
+            <input required value={packageDraft.name} onChange={(event) => setPackageDraft({ ...packageDraft, name: event.target.value })} />
+          </label>
+          <label className="rates-admin-field">
+            <span>Price</span>
+            <input required value={packageDraft.price} onChange={(event) => setPackageDraft({ ...packageDraft, price: event.target.value })} />
+          </label>
+          <label className="rates-admin-field">
+            <span>Inclusions (one per line)</span>
+            <textarea rows={7} value={packageDraft.inclusions} onChange={(event) => setPackageDraft({ ...packageDraft, inclusions: event.target.value })} />
+          </label>
+          <label className="packages-admin-check">
+            <input type="checkbox" checked={packageDraft.highlighted} onChange={(event) => setPackageDraft({ ...packageDraft, highlighted: event.target.checked })} />
+            Highlight package
+          </label>
+        </form>
+      </AdminModal>
     </section>
   )
 }

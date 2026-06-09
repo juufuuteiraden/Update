@@ -1,14 +1,27 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import './PostSection.css'
 import { initializeCarouselEnhancements } from '../utils/carousel.ts'
+import { supabase } from '../supabaseClient'
+import type { GalleryItem } from '../supabaseTypes'
+import { isAdminModeEnabled } from '../utils/adminMode'
+import AdminModal from '../components/admin/AdminModal'
+import { ImagePlus, Save, Trash2, Upload, X } from 'lucide-react'
 
 /* ── Types ── */
 type Post = {
   id: string
+  galleryId?: string
   category: string
   title: string
   subtitle: string
   image: string
+}
+
+type GalleryEdit = {
+  title: string
+  subtitle: string
+  category: string
+  imageFile: File | null
 }
 
 /* ── Data ── */
@@ -120,25 +133,194 @@ const posts: Post[] = [
   },
 ]
 
-/* ── Category Filter ── */
-const categories = ['All', ...Array.from(new Set(posts.map((p) => p.category)))]
-
 /* ── Component ── */
 export default function PostsSection() {
+  const showAdmin = isAdminModeEnabled() && window.location.pathname === '/admin-vs-2024'
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [activeCategory, setActiveCategory] = useState('All')
+  const [galleryPosts, setGalleryPosts] = useState<Post[]>(posts)
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
+  const [manageOpen, setManageOpen] = useState(false)
+  const [galleryDraft, setGalleryDraft] = useState({ title: '', subtitle: '', category: 'Gallery' })
+  const [galleryDraftFile, setGalleryDraftFile] = useState<File | null>(null)
+  const [galleryEdits, setGalleryEdits] = useState<Record<string, GalleryEdit>>({})
+  const [updatingGalleryId, setUpdatingGalleryId] = useState<string | null>(null)
+  const [savingGallery, setSavingGallery] = useState(false)
   const autoplayRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const filteredPosts = activeCategory === 'All' 
-    ? posts 
-    : posts.filter((p) => p.category === activeCategory)
-  
+  const fileName = (file: File) =>
+    `${Date.now()}-${file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-')}`
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadGallery = async () => {
+      const { data, error } = await supabase
+        .from('gallery')
+        .select('id,image_url,order,title,subtitle,category')
+        .order('order', { ascending: true })
+
+      if (!isMounted || error) return
+
+      const uploadedPosts = (data || []).map((item: GalleryItem) => ({
+            id: item.id,
+            galleryId: item.id,
+            category: item.category || 'Gallery',
+            title: item.title || 'Gallery Photo',
+            subtitle: item.subtitle || '',
+            image: item.image_url,
+      }))
+
+      setGalleryPosts([...posts, ...uploadedPosts])
+    }
+
+    loadGallery()
+
+    const channel = supabase
+      .channel('public-gallery')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gallery' }, loadGallery)
+      .subscribe()
+
+    return () => {
+      isMounted = false
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
+  const categories = ['All', ...Array.from(new Set(galleryPosts.map((p) => p.category)))]
+  const filteredPosts = activeCategory === 'All'
+    ? galleryPosts
+    : galleryPosts.filter((p) => p.category === activeCategory)
+  const uploadedGalleryPosts = galleryPosts.filter((post) => post.galleryId)
+
   const totalSlides = filteredPosts.length
+
+  useEffect(() => {
+    setGalleryEdits((current) => {
+      const next: Record<string, GalleryEdit> = {}
+      galleryPosts.forEach((post) => {
+        next[post.id] = current[post.id] || {
+          title: post.title,
+          subtitle: post.subtitle,
+          category: post.category,
+          imageFile: null,
+        }
+      })
+      return next
+    })
+  }, [galleryPosts])
+
+  const updateGalleryEdit = (postId: string, patch: Partial<GalleryEdit>) => {
+    setGalleryEdits((current) => ({
+      ...current,
+      [postId]: {
+        ...(current[postId] ?? {
+          title: '',
+          subtitle: '',
+          category: 'Gallery',
+          imageFile: null,
+        }),
+        ...patch,
+      },
+    }))
+  }
+
+  const addGalleryImage = async (file: File | null) => {
+    if (!file) return
+    setSavingGallery(true)
+    try {
+      const path = fileName(file)
+      const { error: uploadError } = await supabase.storage.from('villa-images').upload(path, file)
+      if (uploadError) throw uploadError
+
+      const imageUrl = supabase.storage.from('villa-images').getPublicUrl(path).data.publicUrl
+      const order = galleryPosts.filter((post) => post.galleryId).length + 1
+      const { error } = await supabase.from('gallery').insert({
+        image_url: imageUrl,
+        order,
+        title: galleryDraft.title || 'Gallery Photo',
+        subtitle: galleryDraft.subtitle || '',
+        category: galleryDraft.category || 'Gallery',
+      })
+      if (error) throw error
+      setGalleryDraft({ title: '', subtitle: '', category: 'Gallery' })
+      setGalleryDraftFile(null)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to add gallery image.')
+    } finally {
+      setSavingGallery(false)
+    }
+  }
+
+  const deleteGalleryImage = async (id?: string) => {
+    if (!id) return
+    if (!window.confirm('Delete this gallery image?')) return
+    const { error } = await supabase.from('gallery').delete().eq('id', id)
+    if (error) alert(error.message)
+  }
+
+  const saveGalleryImage = async (post: Post) => {
+    if (!post.galleryId) return
+    const edit = galleryEdits[post.id]
+    if (!edit) return
+
+    setUpdatingGalleryId(post.galleryId)
+    try {
+      let imageUrl = post.image
+      if (edit.imageFile) {
+        const path = fileName(edit.imageFile)
+        const { error: uploadError } = await supabase.storage.from('villa-images').upload(path, edit.imageFile)
+        if (uploadError) throw uploadError
+        imageUrl = supabase.storage.from('villa-images').getPublicUrl(path).data.publicUrl
+      }
+
+      const { error } = await supabase
+        .from('gallery')
+        .update({
+          image_url: imageUrl,
+          title: edit.title,
+          subtitle: edit.subtitle,
+          category: edit.category || 'Gallery',
+        })
+        .eq('id', post.galleryId)
+
+      if (error) throw error
+      updateGalleryEdit(post.id, { imageFile: null })
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to update gallery image.')
+    } finally {
+      setUpdatingGalleryId(null)
+    }
+  }
+
+  const clearGalleryCaption = async (post: Post) => {
+    if (!post.galleryId) return
+    const nextEdit = {
+      ...(galleryEdits[post.id] || {
+        title: '',
+        subtitle: '',
+        category: post.category,
+        imageFile: null,
+      }),
+      title: '',
+      subtitle: '',
+    }
+
+    updateGalleryEdit(post.id, nextEdit)
+    setUpdatingGalleryId(post.galleryId)
+
+    const { error } = await supabase
+      .from('gallery')
+      .update({ title: '', subtitle: '', category: nextEdit.category || 'Gallery' })
+      .eq('id', post.galleryId)
+
+    if (error) alert(error.message)
+    setUpdatingGalleryId(null)
+  }
 
   /* ── Navigation ── */
   const goTo = useCallback((index: number) => {
@@ -173,9 +355,9 @@ export default function PostsSection() {
   }, [currentIndex, goTo, totalSlides, isPaused])
 // ── Carousel Enhancements ──
 useEffect(() => {
-  const cleanup = initializeCarouselEnhancements(currentIndex, posts, setIsPaused)
+  const cleanup = initializeCarouselEnhancements(currentIndex, galleryPosts, setIsPaused)
   return cleanup
-}, [currentIndex])
+}, [currentIndex, galleryPosts])
   /* ── Keyboard ── */
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -237,6 +419,11 @@ useEffect(() => {
           <p className="posts-subtitle">
             From intimate birthday dinners to grand wedding receptions — every event at Villa Susane is crafted with intention and a touch of the coast.
           </p>
+          {showAdmin && (
+            <button className="posts-admin-manage" type="button" onClick={() => setManageOpen(true)}>
+              Manage
+            </button>
+          )}
         </div>
 
         {/* ── Category Filter Pills ── */}
@@ -284,17 +471,15 @@ useEffect(() => {
                       className="slide-image"
                       loading={index === 0 ? 'eager' : 'lazy'}
                     />
-                    {/* Gradient overlays for text legibility */}
                     <div className="slide-gradient slide-gradient--top" aria-hidden="true" />
                     <div className="slide-gradient slide-gradient--bottom" aria-hidden="true" />
                   </div>
 
-                  {/* ── Caption Overlay ── */}
                   <div className="slide-caption">
                     <div className="slide-caption-inner">
                       <span className="slide-category-tag">{post.category}</span>
-                      <h3 className="slide-title">{post.title}</h3>
-                      <p className="slide-subtitle">{post.subtitle}</p>
+                      {post.title && <h3 className="slide-title">{post.title}</h3>}
+                      {post.subtitle && <p className="slide-subtitle">{post.subtitle}</p>}
                     </div>
                   </div>
                 </div>
@@ -407,6 +592,180 @@ useEffect(() => {
           </div>
         )}
       </div>
+
+      <AdminModal
+        title="Manage Posts Photos"
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+      >
+        <div className="posts-manage-modal">
+          <div className="posts-manage-add">
+            <div className="posts-manage-add__header">
+              <div>
+                <span className="posts-manage-add__eyebrow">New post photo</span>
+                <h3>Add a photo to Posts</h3>
+              </div>
+              <button
+                className="posts-manage-add__button"
+                type="button"
+                disabled={savingGallery || !galleryDraftFile}
+                onClick={() => addGalleryImage(galleryDraftFile)}
+              >
+                <ImagePlus size={17} aria-hidden="true" />
+                {savingGallery ? 'Adding...' : 'Add photo'}
+              </button>
+            </div>
+
+            <div className="posts-manage-add__content">
+              <label className="posts-manage-add__upload" aria-label="Choose gallery image">
+                <Upload size={24} aria-hidden="true" />
+                <strong>{galleryDraftFile ? galleryDraftFile.name : 'Choose photo'}</strong>
+                <span>JPG, PNG, or WebP</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={savingGallery}
+                  onChange={(event) => setGalleryDraftFile(event.target.files?.[0] || null)}
+                />
+              </label>
+
+              <div className="posts-manage-add__fields">
+                <label>
+                  <span>Caption title</span>
+                  <input
+                    value={galleryDraft.title}
+                    onChange={(event) => setGalleryDraft({ ...galleryDraft, title: event.target.value })}
+                    placeholder="Example: Sunset birthday dinner"
+                  />
+                </label>
+                <label>
+                  <span>Description</span>
+                  <input
+                    value={galleryDraft.subtitle}
+                    onChange={(event) => setGalleryDraft({ ...galleryDraft, subtitle: event.target.value })}
+                    placeholder="Example: A breezy evening celebration by the pool"
+                  />
+                </label>
+                <label>
+                  <span>Category</span>
+                  <input
+                    value={galleryDraft.category}
+                    onChange={(event) => setGalleryDraft({ ...galleryDraft, category: event.target.value })}
+                    placeholder="Birthday, Wedding, Corporate..."
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="posts-manage-list-header">
+            <div>
+              <span className="posts-manage-list-header__eyebrow">Editable uploads</span>
+              <h3>{uploadedGalleryPosts.length} custom photo{uploadedGalleryPosts.length === 1 ? '' : 's'}</h3>
+            </div>
+            <p>Built-in showcase photos stay live on the site; uploaded photos appear after them and can be edited here.</p>
+          </div>
+
+          {uploadedGalleryPosts.length > 0 ? (
+            <div className="posts-manage-grid">
+              {uploadedGalleryPosts.map((post) => (
+                <article className="posts-manage-card" key={post.id}>
+                  <div className="posts-manage-card__media">
+                    <img src={post.image} alt={post.title || post.category} />
+                    <div className="posts-manage-card__actions">
+                      <label className="posts-manage-card__icon" aria-label={`Replace ${post.title || 'gallery photo'}`}>
+                        <Upload size={16} aria-hidden="true" />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={updatingGalleryId === post.galleryId}
+                          onChange={(event) =>
+                            updateGalleryEdit(post.id, { imageFile: event.target.files?.[0] || null })
+                          }
+                        />
+                      </label>
+                      <button
+                        className="posts-manage-card__icon posts-manage-card__icon--danger"
+                        type="button"
+                        aria-label={`Delete ${post.title || 'gallery photo'}`}
+                        onClick={() => deleteGalleryImage(post.galleryId)}
+                      >
+                        <Trash2 size={16} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="posts-manage-card__editor">
+                    <label>
+                      <span>Caption</span>
+                      <input
+                        value={galleryEdits[post.id]?.title ?? post.title}
+                        onChange={(event) => updateGalleryEdit(post.id, { title: event.target.value })}
+                        placeholder="Caption title"
+                        disabled={updatingGalleryId === post.galleryId}
+                      />
+                    </label>
+                    <label>
+                      <span>Description</span>
+                      <input
+                        value={galleryEdits[post.id]?.subtitle ?? post.subtitle}
+                        onChange={(event) => updateGalleryEdit(post.id, { subtitle: event.target.value })}
+                        placeholder="Caption description"
+                        disabled={updatingGalleryId === post.galleryId}
+                      />
+                    </label>
+                    <label>
+                      <span>Category</span>
+                      <input
+                        value={galleryEdits[post.id]?.category ?? post.category}
+                        onChange={(event) => updateGalleryEdit(post.id, { category: event.target.value })}
+                        placeholder="Category"
+                        disabled={updatingGalleryId === post.galleryId}
+                      />
+                    </label>
+                    {galleryEdits[post.id]?.imageFile && (
+                      <div className="posts-manage-card__pending">
+                        New photo selected
+                        <button
+                          type="button"
+                          aria-label="Remove selected replacement photo"
+                          onClick={() => updateGalleryEdit(post.id, { imageFile: null })}
+                        >
+                          <X size={14} aria-hidden="true" />
+                        </button>
+                      </div>
+                    )}
+                    <div className="posts-manage-card__buttons">
+                      <button
+                        className="posts-manage-card__save"
+                        type="button"
+                        onClick={() => saveGalleryImage(post)}
+                        disabled={updatingGalleryId === post.galleryId}
+                      >
+                        <Save size={15} aria-hidden="true" />
+                        Save
+                      </button>
+                      <button
+                        className="posts-manage-card__clear"
+                        type="button"
+                        onClick={() => clearGalleryCaption(post)}
+                        disabled={updatingGalleryId === post.galleryId}
+                      >
+                        Clear caption
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="posts-manage-empty">
+              <ImagePlus size={22} aria-hidden="true" />
+              <strong>No uploaded photos yet</strong>
+              <span>Choose a photo above, add a caption and category, then publish it into Posts.</span>
+            </div>
+          )}
+        </div>
+      </AdminModal>
     </section>
   )
 }

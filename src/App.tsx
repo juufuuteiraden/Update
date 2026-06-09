@@ -10,6 +10,10 @@ import ContactSection from './pages/ContactSection'
 import FindUs from './pages/FindUs'
 import PostsSection from './pages/PostsSection'
 import ReviewsSection from './pages/ReviewsSection'
+import AdminModeToolbar from './components/admin/AdminModeToolbar'
+import { isAdminModeEnabled } from './utils/adminMode'
+
+
 
 
 
@@ -565,6 +569,7 @@ function BookingModal({
    ---------------------------------------------------------- */
 export default function App() {
   const [headerScrolled, setHeaderScrolled] = useState(false)
+  const [adminMode, setAdminMode] = useState(() => isAdminModeEnabled())
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState<RoomData | null>(null)
@@ -729,8 +734,33 @@ export default function App() {
     return <AdminReservations />
   }
 
+  if (window.location.pathname === '/admin-vs-2024') {
+    // Show the real homepage, but with admin overlays enabled.
+    // The session flag lives in localStorage (login already exists on /admin-vs-2024).
+    // We mount the same App UI for full fidelity, then render the toolbar/overlays via `adminMode`.
+    if (!isAdminModeEnabled()) {
+      try {
+        localStorage.setItem('villa_susane_admin_session', 'true')
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  // Admin overlay toggle (admin-only)
+  const showAdminToolbar = adminMode && window.location.pathname === '/admin-vs-2024'
+
+  const adminToolbar = showAdminToolbar ? (
+    <AdminModeToolbar onLogout={() => setAdminMode(false)} />
+  ) : null
+
+
+
+
   return (
     <div>
+      {adminToolbar}
+
       {/* ── Grain texture overlay ── */}
       <div className="grain-overlay" />
 
