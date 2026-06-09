@@ -736,19 +736,23 @@ export default function App() {
 
   if (window.location.pathname === '/admin-vs-2024') {
     // Show the real homepage, but with admin overlays enabled.
-    // The session flag lives in localStorage (login already exists on /admin-vs-2024).
-    // We mount the same App UI for full fidelity, then render the toolbar/overlays via `adminMode`.
+    // Sync both localStorage and React state so toolbar renders immediately.
     if (!isAdminModeEnabled()) {
       try {
         localStorage.setItem('villa_susane_admin_session', 'true')
+        setAdminMode(true)
       } catch {
         // ignore
       }
+    } else {
+      // ensure state is also correct when already enabled
+      setAdminMode(true)
     }
   }
 
   // Admin overlay toggle (admin-only)
   const showAdminToolbar = adminMode && window.location.pathname === '/admin-vs-2024'
+
 
   const adminToolbar = showAdminToolbar ? (
     <AdminModeToolbar onLogout={() => setAdminMode(false)} />
