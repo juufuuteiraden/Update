@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { client } from './sanityClient'
 import './App.css'
 import HeroSection from './pages/HeroSection'
-import AdminReservations from './pages/AdminReservations'
+
 import Amenities from './pages/Amenities'
 import Rates from './pages/Rates'
 import Packages from './pages/Packages'
@@ -12,11 +12,7 @@ import PostsSection from './pages/PostsSection'
 import ReviewsSection from './pages/ReviewsSection'
 import AdminModeToolbar from './components/admin/AdminModeToolbar'
 import { isAdminModeEnabled } from './utils/adminMode'
-
-
-
-
-
+import './components/admin/adminModeLogin.css'
 
 /* ----------------------------------------------------------
    Types
@@ -730,22 +726,98 @@ export default function App() {
     transition: 'border 0.2s, box-shadow 0.2s',
   } as React.CSSProperties
 
-  if (new URLSearchParams(window.location.search).get('key') === 'admin') {
-    return <AdminReservations />
-  }
+  // removed legacy AdminReservations route
 
-  if (window.location.pathname === '/admin-vs-2024') {
-    // Show the real homepage, but with admin overlays enabled.
-    // The session flag lives in localStorage (login already exists on /admin-vs-2024).
-    // We mount the same App UI for full fidelity, then render the toolbar/overlays via `adminMode`.
-    if (!isAdminModeEnabled()) {
+
+  const ADMIN_USER = 'admin'
+  const ADMIN_PASS = 'susanevilla_admin2026'
+  const SESSION_KEY = 'villa_susane_admin_session'
+
+  const [adminAuth, setAdminAuth] = useState(() => isAdminModeEnabled())
+  const [adminLogin, setAdminLogin] = useState({ user: '', password: '', showPassword: false })
+  const [adminLoginError, setAdminLoginError] = useState('')
+
+  const isAdminRoute = window.location.pathname === '/admin-vs-2024'
+
+  const handleAdminLogin = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (adminLogin.user === ADMIN_USER && adminLogin.password === ADMIN_PASS) {
       try {
-        localStorage.setItem('villa_susane_admin_session', 'true')
+        localStorage.setItem(SESSION_KEY, 'true')
       } catch {
         // ignore
       }
+      setAdminAuth(true)
+      setAdminLoginError('')
+    } else {
+      setAdminLoginError('Invalid admin credentials.')
     }
   }
+
+  const shouldShowAdminLogin = isAdminRoute && !adminAuth
+
+  // Important: do not place hooks behind conditional returns.
+  // This component still mounts all hooks above, and only conditionally renders.
+  if (shouldShowAdminLogin) {
+    return (
+      <main className="admin-mode-login-shell">
+        <form onSubmit={handleAdminLogin} className="admin-mode-login-card">
+          <h1 className="admin-mode-login-title">Admin Access</h1>
+          <p className="admin-mode-login-subtitle">Enter credentials to open the admin mode screen.</p>
+
+          <input
+            className="admin-mode-login-input"
+            value={adminLogin.user}
+            placeholder="Username"
+            onChange={(e) => setAdminLogin({ ...adminLogin, user: e.target.value })}
+            autoComplete="username"
+          />
+
+          <div className="admin-mode-login-password">
+            <div className="admin-mode-login-password">
+              <input
+                className="admin-mode-login-input admin-mode-login-password__input"
+                type={adminLogin.showPassword ? 'text' : 'password'}
+                value={adminLogin.password}
+                placeholder="Password"
+                onChange={(e) => setAdminLogin((prev) => ({ ...prev, password: e.target.value }))}
+                autoComplete="current-password"
+              />
+
+              <button
+                type="button"
+                className="admin-mode-login-password__toggle"
+                aria-label={adminLogin.showPassword ? 'Hide password' : 'Show password'}
+                onClick={() => setAdminLogin((prev) => ({ ...prev, showPassword: !prev.showPassword }))}
+              >
+                {adminLogin.showPassword ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M10.58 10.58a2 2 0 002.83 2.83" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M9.88 5.08A10.94 10.94 0 0112 5c7 0 10 7 10 7a15.3 15.3 0 01-3.07 4.27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M6.12 6.12C3.6 7.72 2 12 2 12s3 7 10 7c1.2 0 2.3-.22 3.3-.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {adminLoginError && <p className="admin-mode-login-error">{adminLoginError}</p>}
+
+          <button className="admin-mode-login-submit" type="submit">
+            Sign In
+          </button>
+        </form>
+      </main>
+    )
+  }
+
+  // When authenticated, keep rendering the normal home screen, but enable admin overlays.
 
   // Admin overlay toggle (admin-only)
   const showAdminToolbar = adminMode && window.location.pathname === '/admin-vs-2024'
@@ -754,10 +826,10 @@ export default function App() {
     <AdminModeToolbar onLogout={() => setAdminMode(false)} />
   ) : null
 
-
-
+  // NOTE: avoid conditional hook calls above
 
   return (
+
     <div>
       {adminToolbar}
 

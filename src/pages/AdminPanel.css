@@ -9,7 +9,9 @@
 .admin-login-screen {
   display: grid;
   place-items: center;
+  padding: 2rem 1rem;
 }
+
 
 .admin-login-card {
   width: 380px;

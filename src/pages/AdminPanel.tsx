@@ -3,6 +3,9 @@ import './AdminPanel.css'
 import { supabase } from '../supabaseClient'
 import type { GalleryItem, PackageItem, ReviewItem, RoomItem } from '../supabaseTypes'
 
+// Local-only UI state tweak (no backend auth): show/hide password on the admin login screen.
+// (Used by the gate for /admin-vs-2024.)
+
 const ADMIN_EMAIL = 'admin@villasusane.com'
 const ADMIN_PASSWORD = 'VillaSusane2024!'
 const SESSION_KEY = 'villa_susane_admin_session'
@@ -31,7 +34,7 @@ function fileName(file: File) {
 
 export default function AdminPanel() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem(SESSION_KEY) === 'true')
-  const [login, setLogin] = useState({ email: '', password: '' })
+  const [login, setLogin] = useState({ email: '', password: '', showPassword: false })
   const [loginError, setLoginError] = useState('')
   const [active, setActive] = useState<Section>('Gallery')
   const [message, setMessage] = useState('')
@@ -119,7 +122,7 @@ export default function AdminPanel() {
       const imageUrl = await uploadImage(file)
       const { error } = await supabase.from('gallery').insert({ image_url: imageUrl, order: galleryOrder })
       if (error) throw error
-      showMessage('Gallery image added.')
+      showMessage('Gallery image uploaded successfully.')
       await loadAll()
     } catch (error) {
       showMessage(error instanceof Error ? error.message : 'Unable to add image.')
@@ -229,8 +232,28 @@ export default function AdminPanel() {
         <form className="admin-login-card" onSubmit={handleLogin}>
           <span>Villa Susane</span>
           <h1>Admin Access</h1>
-          <input type="email" placeholder="Email" value={login.email} onChange={(event) => setLogin({ ...login, email: event.target.value })} />
-          <input type="password" placeholder="Password" value={login.password} onChange={(event) => setLogin({ ...login, password: event.target.value })} />
+          <input
+            type="email"
+            placeholder="Email"
+            value={login.email}
+            onChange={(event) => setLogin({ ...login, email: event.target.value })}
+          />
+          <div className="admin-password-field">
+            <input
+              type={login.showPassword ? 'text' : 'password'}
+              placeholder="Password"
+              value={login.password}
+              onChange={(event) => setLogin({ ...login, password: event.target.value })}
+            />
+            <button
+              type="button"
+              className="admin-password-toggle"
+              onClick={() => setLogin({ ...login, showPassword: !login.showPassword })}
+              aria-label={login.showPassword ? 'Hide password' : 'Show password'}
+            >
+              {login.showPassword ? '🙈' : '👁️'}
+            </button>
+          </div>
           {loginError && <p>{loginError}</p>}
           <button type="submit">Sign In</button>
         </form>
