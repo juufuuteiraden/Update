@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { client } from './sanityClient'
+
 import './App.css'
 import HeroSection from './pages/HeroSection'
 
@@ -570,38 +570,15 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState<RoomData | null>(null)
   const [alert, setAlert] = useState<{ message: string; color: string } | null>(null)
-  const [siteSettings, setSiteSettings] = useState<SiteSettings>(fallbackSiteSettings)
+  const siteSettings = fallbackSiteSettings
+
 
   useScrollReveal()
 
-  useEffect(() => {
-    let isMounted = true
-
-    client
-      .fetch<Partial<SiteSettings> | null>(`
-        *[_type == "siteSettings"][0]{
-          title,
-          navigation[]{label, href}
-        }
-      `)
-      .then((data) => {
-        if (!isMounted || !data) return
-        setSiteSettings({
-          ...fallbackSiteSettings,
-          ...data,
-          navigation: data.navigation?.length ? data.navigation : fallbackSiteSettings.navigation,
-        })
-      })
-      .catch(() => {
-        if (isMounted) setSiteSettings(fallbackSiteSettings)
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
+  // Sanity disabled (not used anymore). Keep fallbackSiteSettings only.
 
   useEffect(() => {
+
     const handleScroll = () => {
       setHeaderScrolled(window.scrollY > window.innerHeight - 100)
     }
