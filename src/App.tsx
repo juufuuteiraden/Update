@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 
 import './App.css'
 import HeroSection from './pages/HeroSection'
-
 import Amenities from './pages/Amenities'
 import Rates from './pages/Rates'
 import Packages from './pages/Packages'
@@ -101,9 +100,8 @@ const navLinks = [
   { label: 'Amenities', href: '#amenities' },
   { label: 'Location', href: '#location' },
   { label: 'Packages', href: '#packages' },
-   { label: 'Reviews', href: '#reviews' },
+  { label: 'Reviews', href: '#reviews' },
   { label: 'Contact', href: '#contact' },
- 
 ]
 
 type SiteSettings = {
@@ -115,6 +113,13 @@ const fallbackSiteSettings: SiteSettings = {
   title: 'Villa Susane',
   navigation: navLinks,
 }
+
+/* ----------------------------------------------------------
+   Admin constants
+   ---------------------------------------------------------- */
+const ADMIN_USER = 'admin'
+const ADMIN_PASS = 'susanevilla_admin2026'
+const SESSION_KEY = 'villa_susane_admin_session'
 
 /* ----------------------------------------------------------
    Custom hook for scroll-triggered animations
@@ -174,10 +179,8 @@ function Alert({ message, color, onClose }: { message: string; color: string; on
 
 function formatReservationDate(value: string) {
   if (!value) return ''
-
   const [year, month, day] = value.split('-').map(Number)
   if (!year || !month || !day) return ''
-
   return new Intl.DateTimeFormat('en-US', {
     month: 'long',
     day: 'numeric',
@@ -200,11 +203,9 @@ function formatPeso(value: number) {
 
 function getReservationNights(checkIn: string, checkOut: string) {
   if (!checkIn || !checkOut) return 0
-
   const start = new Date(`${checkIn}T00:00:00`)
   const end = new Date(`${checkOut}T00:00:00`)
   const nights = Math.round((end.getTime() - start.getTime()) / 86400000)
-
   return nights > 0 ? nights : 0
 }
 
@@ -261,12 +262,10 @@ function BookingModal({
 
   const handleReview = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-
     if (!nights) {
       setFormError('Please choose a check-out date after your check-in date.')
       return
     }
-
     setFormError('')
     setSummary({
       roomName: room.name,
@@ -281,7 +280,6 @@ function BookingModal({
 
   const sendReservation = async () => {
     if (!summary) return
-
     setIsSending(true)
     const payload = new FormData()
     payload.append('subject', `${summary.roomName} Reservation!`)
@@ -303,9 +301,7 @@ function BookingModal({
         body: payload,
         headers: { Accept: 'application/json' },
       })
-
       if (!response.ok) throw new Error('Unable to send reservation.')
-
       onSubmit(summary.roomName, summary.form)
       setIsSending(false)
       resetAndClose()
@@ -375,133 +371,133 @@ function BookingModal({
 
         {!summary ? (
           <>
-        <h3
-          style={{
-            fontFamily: 'Poppins, sans-serif',
-            fontWeight: 500,
-            fontSize: '1.5rem',
-            color: '#006D77',
-            marginBottom: '0.5rem',
-          }}
-        >
-          Reserve <span data-sanity="room.name">{room.name}</span>
-        </h3>
-        <p
-          style={{
-            fontFamily: 'Inter, sans-serif',
-            fontSize: '0.95rem',
-            color: '#6B7B7C',
-            marginBottom: '1.5rem',
-          }}
-        >
-          {room.price} / night · {room.guests}
-        </p>
+            <h3
+              style={{
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 500,
+                fontSize: '1.5rem',
+                color: '#006D77',
+                marginBottom: '0.5rem',
+              }}
+            >
+              Reserve <span data-sanity="room.name">{room.name}</span>
+            </h3>
+            <p
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontSize: '0.95rem',
+                color: '#6B7B7C',
+                marginBottom: '1.5rem',
+              }}
+            >
+              {room.price} / night · {room.guests}
+            </p>
 
-        <form
-          onSubmit={handleReview}
-          className="reservation-form"
-          style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div className="form-field">
-              <label className="form-label">Check-in Date</label>
-              <input
-                type="date"
-                required
-                className="form-input reservation-native-date"
-                value={formData.checkIn}
-                onChange={(e) => setFormData({ ...formData, checkIn: e.target.value })}
-              />
-            </div>
-            <div className="form-field">
-              <label className="form-label">Check-out Date</label>
-              <input
-                type="date"
-                required
-                min={formData.checkIn || undefined}
-                className="form-input reservation-native-date"
-                value={formData.checkOut}
-                onChange={(e) => setFormData({ ...formData, checkOut: e.target.value })}
-              />
-            </div>
-          </div>
+            <form
+              onSubmit={handleReview}
+              className="reservation-form"
+              style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-field">
+                  <label className="form-label">Check-in Date</label>
+                  <input
+                    type="date"
+                    required
+                    className="form-input reservation-native-date"
+                    value={formData.checkIn}
+                    onChange={(e) => setFormData({ ...formData, checkIn: e.target.value })}
+                  />
+                </div>
+                <div className="form-field">
+                  <label className="form-label">Check-out Date</label>
+                  <input
+                    type="date"
+                    required
+                    min={formData.checkIn || undefined}
+                    className="form-input reservation-native-date"
+                    value={formData.checkOut}
+                    onChange={(e) => setFormData({ ...formData, checkOut: e.target.value })}
+                  />
+                </div>
+              </div>
 
-          <div className="reservation-total-preview">
-            <span>{nights || 0} night{nights === 1 ? '' : 's'} selected</span>
-            <strong>{formatPeso(total)}</strong>
-          </div>
+              <div className="reservation-total-preview">
+                <span>{nights || 0} night{nights === 1 ? '' : 's'} selected</span>
+                <strong>{formatPeso(total)}</strong>
+              </div>
 
-          <div className="form-field">
-            <label className="form-label">Number of Guests</label>
-            <input
-              type="number"
-              min={1}
-              max={30}
-              required
-              className="form-input"
-              name="Number of Guests"
-              value={formData.guests}
-              onChange={(e) => setFormData({ ...formData, guests: e.target.value })}
-            />
-          </div>
+              <div className="form-field">
+                <label className="form-label">Number of Guests</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  required
+                  className="form-input"
+                  name="Number of Guests"
+                  value={formData.guests}
+                  onChange={(e) => setFormData({ ...formData, guests: e.target.value })}
+                />
+              </div>
 
-          <div className="form-field">
-            <label className="form-label">Full Name</label>
-            <input
-              type="text"
-              required
-              className="form-input"
-              name="Full Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
-          </div>
+              <div className="form-field">
+                <label className="form-label">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  className="form-input"
+                  name="Full Name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
 
-          <div className="form-field">
-            <label className="form-label">Email</label>
-            <input
-              type="email"
-              required
-              className="form-input"
-              name="Email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-          </div>
+              <div className="form-field">
+                <label className="form-label">Email</label>
+                <input
+                  type="email"
+                  required
+                  className="form-input"
+                  name="Email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
 
-          <div className="form-field">
-            <label className="form-label">Phone</label>
-            <input
-              type="tel"
-              required
-              className="form-input"
-              name="Phone"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
-          </div>
+              <div className="form-field">
+                <label className="form-label">Phone</label>
+                <input
+                  type="tel"
+                  required
+                  className="form-input"
+                  name="Phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                />
+              </div>
 
-          <div className="form-field">
-            <label className="form-label">Special Requests (Optional)</label>
-            <textarea
-              rows={3}
-              className="form-textarea"
-              name="Special Requests"
-              value={formData.requests}
-              onChange={(e) => setFormData({ ...formData, requests: e.target.value })}
-            />
-          </div>
+              <div className="form-field">
+                <label className="form-label">Special Requests (Optional)</label>
+                <textarea
+                  rows={3}
+                  className="form-textarea"
+                  name="Special Requests"
+                  value={formData.requests}
+                  onChange={(e) => setFormData({ ...formData, requests: e.target.value })}
+                />
+              </div>
 
-          {formError && <p className="reservation-error">{formError}</p>}
+              {formError && <p className="reservation-error">{formError}</p>}
 
-          <button
-            type="submit"
-            className="submit-button reservation-submit-button"
-            style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem' }}
-          >
-            Review Inquiry
-          </button>
-        </form>
+              <button
+                type="submit"
+                className="submit-button reservation-submit-button"
+                style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem' }}
+              >
+                Review Inquiry
+              </button>
+            </form>
           </>
         ) : (
           <div className="reservation-confirmation">
@@ -572,10 +568,35 @@ export default function App() {
   const [alert, setAlert] = useState<{ message: string; color: string } | null>(null)
   const siteSettings = fallbackSiteSettings
 
+  // Admin login state — only used on /admin-vs-2024
+  const [adminAuth, setAdminAuth] = useState(() => isAdminModeEnabled())
+  const [adminLogin, setAdminLogin] = useState({ user: '', password: '', showPassword: false })
+  const [adminLoginError, setAdminLoginError] = useState('')
 
   useScrollReveal()
 
-  // Sanity disabled (not used anymore). Keep fallbackSiteSettings only.
+  useEffect(() => {
+    let isMounted = true
+    client
+      .fetch<Partial<SiteSettings> | null>(`
+        *[_type == "siteSettings"][0]{
+          title,
+          navigation[]{label, href}
+        }
+      `)
+      .then((data) => {
+        if (!isMounted || !data) return
+        setSiteSettings({
+          ...fallbackSiteSettings,
+          ...data,
+          navigation: data.navigation?.length ? data.navigation : fallbackSiteSettings.navigation,
+        })
+      })
+      .catch(() => {
+        if (isMounted) setSiteSettings(fallbackSiteSettings)
+      })
+    return () => { isMounted = false }
+  }, [])
 
   useEffect(() => {
 
@@ -611,7 +632,7 @@ export default function App() {
   }, [])
 
   const handleBookingSubmit = useCallback(
-    (roomName: string, form: { checkIn: string; checkOut: string; guests: string; name: string; email: string; phone: string; requests: string }) => {
+    (roomName: string, form: ReservationFormData) => {
       const STORAGE_KEY = 'balamban_reservations'
       const now = new Date().toISOString()
       const newReservation = {
@@ -642,9 +663,7 @@ export default function App() {
     if (el) el.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const visibleNavLinks = siteSettings.navigation.length ? siteSettings.navigation : navLinks
-
-  /* Shared style objects — still used by sub-components via props */
+  /* Shared style objects */
   const coralBtn = {
     display: 'inline-block',
     padding: '1rem 2.5rem',
@@ -703,39 +722,25 @@ export default function App() {
     transition: 'border 0.2s, box-shadow 0.2s',
   } as React.CSSProperties
 
-  // removed legacy AdminReservations route
-
-
-  const ADMIN_USER = 'admin'
-  const ADMIN_PASS = 'susanevilla_admin2026'
-  const SESSION_KEY = 'villa_susane_admin_session'
-
-  const [adminAuth, setAdminAuth] = useState(() => isAdminModeEnabled())
-  const [adminLogin, setAdminLogin] = useState({ user: '', password: '', showPassword: false })
-  const [adminLoginError, setAdminLoginError] = useState('')
-
+  /* ----------------------------------------------------------
+     Admin route: /admin-vs-2024
+     All hooks are declared above — only rendering is conditional.
+     ---------------------------------------------------------- */
   const isAdminRoute = window.location.pathname === '/admin-vs-2024'
 
   const handleAdminLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (adminLogin.user === ADMIN_USER && adminLogin.password === ADMIN_PASS) {
-      try {
-        localStorage.setItem(SESSION_KEY, 'true')
-      } catch {
-        // ignore
-      }
+      try { localStorage.setItem(SESSION_KEY, 'true') } catch { /* ignore */ }
       setAdminAuth(true)
+      setAdminMode(true)
       setAdminLoginError('')
     } else {
       setAdminLoginError('Invalid admin credentials.')
     }
   }
 
-  const shouldShowAdminLogin = isAdminRoute && !adminAuth
-
-  // Important: do not place hooks behind conditional returns.
-  // This component still mounts all hooks above, and only conditionally renders.
-  if (shouldShowAdminLogin) {
+  if (isAdminRoute && !adminAuth) {
     return (
       <main className="admin-mode-login-shell">
         <form onSubmit={handleAdminLogin} className="admin-mode-login-card">
@@ -751,37 +756,34 @@ export default function App() {
           />
 
           <div className="admin-mode-login-password">
-            <div className="admin-mode-login-password">
-              <input
-                className="admin-mode-login-input admin-mode-login-password__input"
-                type={adminLogin.showPassword ? 'text' : 'password'}
-                value={adminLogin.password}
-                placeholder="Password"
-                onChange={(e) => setAdminLogin((prev) => ({ ...prev, password: e.target.value }))}
-                autoComplete="current-password"
-              />
-
-              <button
-                type="button"
-                className="admin-mode-login-password__toggle"
-                aria-label={adminLogin.showPassword ? 'Hide password' : 'Show password'}
-                onClick={() => setAdminLogin((prev) => ({ ...prev, showPassword: !prev.showPassword }))}
-              >
-                {adminLogin.showPassword ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M10.58 10.58a2 2 0 002.83 2.83" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M9.88 5.08A10.94 10.94 0 0112 5c7 0 10 7 10 7a15.3 15.3 0 01-3.07 4.27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M6.12 6.12C3.6 7.72 2 12 2 12s3 7 10 7c1.2 0 2.3-.22 3.3-.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </button>
-            </div>
+            <input
+              className="admin-mode-login-input admin-mode-login-password__input"
+              type={adminLogin.showPassword ? 'text' : 'password'}
+              value={adminLogin.password}
+              placeholder="Password"
+              onChange={(e) => setAdminLogin((prev) => ({ ...prev, password: e.target.value }))}
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              className="admin-mode-login-password__toggle"
+              aria-label={adminLogin.showPassword ? 'Hide password' : 'Show password'}
+              onClick={() => setAdminLogin((prev) => ({ ...prev, showPassword: !prev.showPassword }))}
+            >
+              {adminLogin.showPassword ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M3 3l18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M10.58 10.58a2 2 0 002.83 2.83" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M9.88 5.08A10.94 10.94 0 0112 5c7 0 10 7 10 7a15.3 15.3 0 01-3.07 4.27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M6.12 6.12C3.6 7.72 2 12 2 12s3 7 10 7c1.2 0 2.3-.22 3.3-.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
           </div>
 
           {adminLoginError && <p className="admin-mode-login-error">{adminLoginError}</p>}
@@ -794,29 +796,44 @@ export default function App() {
     )
   }
 
-  // When authenticated, keep rendering the normal home screen, but enable admin overlays.
+  if (isAdminRoute && adminAuth) {
+    return (
+      <div>
+        <AdminModeToolbar
+          onLogout={() => {
+            try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+            setAdminAuth(false)
+            setAdminMode(false)
+          }}
+        />
+        {/* Add your AdminReservations component here if available */}
+      </div>
+    )
+  }
 
-  // Admin overlay toggle (admin-only)
-  const showAdminToolbar = adminMode && window.location.pathname === '/admin-vs-2024'
-
-  const adminToolbar = showAdminToolbar ? (
-    <AdminModeToolbar onLogout={() => setAdminMode(false)} />
-  ) : null
-
-  // NOTE: avoid conditional hook calls above
+  /* ----------------------------------------------------------
+     Normal homepage render
+     ---------------------------------------------------------- */
+  const visibleNavLinks = siteSettings.navigation.length ? siteSettings.navigation : navLinks
 
   return (
-
     <div>
-      {adminToolbar}
+      {adminMode && (
+        <AdminModeToolbar
+          onLogout={() => {
+            try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+            setAdminMode(false)
+          }}
+        />
+      )}
 
-      {/* ── Grain texture overlay ── */}
+      {/* Grain texture overlay */}
       <div className="grain-overlay" />
 
-      {/* ── Alert ── */}
+      {/* Alert */}
       {alert && <Alert message={alert.message} color={alert.color} onClose={() => setAlert(null)} />}
 
-      {/* ── Booking Modal ── */}
+      {/* Booking Modal */}
       <BookingModal room={selectedRoom} isOpen={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleBookingSubmit} />
 
       {/* ══════════════════════════════════════════
@@ -833,7 +850,6 @@ export default function App() {
           height: headerScrolled ? '64px' : '80px',
           display: 'flex',
           alignItems: 'center',
-          /* Transparent by default; .scrolled class adds the glass effect */
           background: headerScrolled ? 'rgba(0, 109, 119, 0.96)' : 'transparent',
         }}
       >
@@ -848,7 +864,6 @@ export default function App() {
             alignItems: 'center',
           }}
         >
-          {/* Logo */}
           <a
             href="#home"
             onClick={(e) => { e.preventDefault(); scrollToSection('#home') }}
@@ -864,7 +879,6 @@ export default function App() {
             {siteSettings.title}
           </a>
 
-          {/* Desktop Nav */}
           <nav className="desktop-nav" data-sanity="siteSettings.navigation" style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
             {visibleNavLinks.map((link) => (
               <a
@@ -878,7 +892,6 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Mobile Hamburger — three animated spans */}
           <button
             className={`mobile-hamburger${mobileMenuOpen ? ' open' : ''}`}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -891,7 +904,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* Mobile Menu Drawer */}
         <div
           className={`mobile-menu${mobileMenuOpen ? ' open' : ''}`}
           style={{
@@ -918,51 +930,28 @@ export default function App() {
         </div>
       </header>
 
-      {/* ══════════════════════════════════════════
-          HERO SECTION
-      ══════════════════════════════════════════ */}
       <HeroSection onLearnMore={() => scrollToSection('#rates')} />
       <SectionDivider />
 
-      {/* ══════════════════════════════════════════
-          POSTS SECTION
-      ══════════════════════════════════════════ */}
       <PostsSection />
       <SectionDivider />
 
-      {/* ══════════════════════════════════════════
-          RATES SECTION
-      ══════════════════════════════════════════ */}
       <Rates rooms={rooms} onBook={openBookingModal} />
       <SectionDivider />
 
-      {/* ══════════════════════════════════════════
-          AMENITIES SECTION
-      ══════════════════════════════════════════ */}
       <Amenities />
       <SectionDivider />
 
-      {/* ══════════════════════════════════════════
-          FIND US / LOCATION SECTION
-      ══════════════════════════════════════════ */}
       <FindUs />
-      
       <SectionDivider />
 
-
-
-      {/* ══════════════════════════════════════════
-          PACKAGES SECTION
-      ══════════════════════════════════════════ */}
       <Packages onAskAboutThis={() => scrollToSection('#contact')} />
       <SectionDivider />
       <SectionDivider />
+
       <ReviewsSection />
       <SectionDivider />
 
-      {/* ══════════════════════════════════════════
-          CONTACT SECTION
-      ══════════════════════════════════════════ */}
       <ContactSection
         coralBtn={coralBtn}
         sectionLabel={sectionLabel}
@@ -970,7 +959,6 @@ export default function App() {
         sectionSubtitle={sectionSubtitle}
         inputFieldStyle={inputFieldStyle}
       />
-      
 
       {/* ══════════════════════════════════════════
           FOOTER
@@ -984,20 +972,6 @@ export default function App() {
           overflow: 'hidden',
         }}
       >
-        {/* Footer orb decoration */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '-100px',
-            right: '-100px',
-            width: '400px',
-            height: '400px',
-            borderRadius: '50%',
-            background: 'transparent',
-            pointerEvents: 'none',
-          }}
-        />
-
         <div
           className="reveal"
           style={{
@@ -1011,7 +985,6 @@ export default function App() {
             zIndex: 1,
           }}
         >
-          {/* Column 1: Brand */}
           <div>
             <h3 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 400, fontSize: '1.5rem', color: '#1A2B2C', marginBottom: '0.5rem' }}>
               Villa Susane Resort
@@ -1021,7 +994,6 @@ export default function App() {
             </p>
           </div>
 
-          {/* Column 2: Contact */}
           <div>
             <h4 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#FF8360', marginBottom: '1rem' }}>
               Contact
@@ -1037,7 +1009,6 @@ export default function App() {
             </p>
           </div>
 
-          {/* Column 3: Social */}
           <div>
             <h4 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#FF8360', marginBottom: '1rem' }}>
               Follow Us
@@ -1081,7 +1052,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Bottom Bar */}
         <div
           style={{
             maxWidth: '1200px',
