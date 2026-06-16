@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { client } from './sanityClient'
+
 import './App.css'
 import HeroSection from './pages/HeroSection'
 import Amenities from './pages/Amenities'
@@ -566,7 +566,7 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState<RoomData | null>(null)
   const [alert, setAlert] = useState<{ message: string; color: string } | null>(null)
-  const [siteSettings, setSiteSettings] = useState<SiteSettings>(fallbackSiteSettings)
+  const siteSettings = fallbackSiteSettings
 
   // Admin login state — only used on /admin-vs-2024
   const [adminAuth, setAdminAuth] = useState(() => isAdminModeEnabled())
@@ -599,6 +599,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+
     const handleScroll = () => {
       setHeaderScrolled(window.scrollY > window.innerHeight - 100)
     }

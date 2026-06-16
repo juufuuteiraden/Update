@@ -1,8 +1,9 @@
 # TODO
 
-- [ ] Add show-password icon to admin authentication screen (not text hints). 
-  - [ ] Update admin login markup to use proper button/icon.
-  - [ ] Ensure it reflects current typing immediately (no “hint” overlay behavior).
-  - [ ] Update/extend admin login CSS accordingly.
-  - [ ] Verify no styling regressions on desktop/mobile.
+- [ ] Sanity removed from `src/App.tsx` (no `client.fetch`, no Sanity-driven site settings).
+- [ ] Keep fallback navigation/title from local constants.
+- [ ] Keep admin mode login + toolbar logic.
+- [ ] Ensure TypeScript compile succeeds.
+- [ ] Run build (`npm run build`) to verify.
+
 
