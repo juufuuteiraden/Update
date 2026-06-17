@@ -115,6 +115,8 @@ export default function AdminPanel() {
     return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
   }
 
+
+
   const addGalleryImage = async (file: File | null) => {
     if (!file) return
     setLoading(true)
@@ -122,8 +124,12 @@ export default function AdminPanel() {
       const imageUrl = await uploadImage(file)
       const { error } = await supabase.from('gallery').insert({ image_url: imageUrl, order: galleryOrder })
       if (error) throw error
-      showMessage('Gallery image uploaded successfully.')
+      showMessage('Success! Gallery image upload completed.')
       await loadAll()
+      // Ensure any image preview/cached <img> elements update immediately.
+      // (Avoids needing a full page refresh.)
+      setTimeout(() => setMessage(''), 3000)
+
     } catch (error) {
       showMessage(error instanceof Error ? error.message : 'Unable to add image.')
     } finally {

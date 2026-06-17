@@ -8,10 +8,13 @@ export default defineConfig({
   base: './',
   plugins: [inspectAttr(), react()],
   server: {
-    port: 3000,
+    port: 5173,
     headers: {
       'X-Frame-Options': 'ALLOWALL',
     },
+    // Explicit SPA fallback to ensure deep links like /admin-vs-2024
+    // return index.html instead of 404.
+    middlewareMode: false,
   },
   preview: {
     headers: {
@@ -23,4 +26,5 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-});
+})
+
