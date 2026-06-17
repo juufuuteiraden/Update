@@ -12,7 +12,6 @@ import ReviewsSection from './pages/ReviewsSection'
 import AdminModeToolbar from './components/admin/AdminModeToolbar'
 import { isAdminModeEnabled } from './utils/adminMode'
 import './components/admin/adminModeLogin.css'
-
 /* ----------------------------------------------------------
    Types
    ---------------------------------------------------------- */
@@ -575,28 +574,9 @@ export default function App() {
 
   useScrollReveal()
 
-  useEffect(() => {
-    let isMounted = true
-    client
-      .fetch<Partial<SiteSettings> | null>(`
-        *[_type == "siteSettings"][0]{
-          title,
-          navigation[]{label, href}
-        }
-      `)
-      .then((data) => {
-        if (!isMounted || !data) return
-        setSiteSettings({
-          ...fallbackSiteSettings,
-          ...data,
-          navigation: data.navigation?.length ? data.navigation : fallbackSiteSettings.navigation,
-        })
-      })
-      .catch(() => {
-        if (isMounted) setSiteSettings(fallbackSiteSettings)
-      })
-    return () => { isMounted = false }
-  }, [])
+  // Sanity siteSettings fetch removed: current build does not define a Sanity `client`.
+  // Keeping fallbackSiteSettings ensures the homepage and /admin-vs-2024 route load.
+
 
   useEffect(() => {
 
@@ -726,7 +706,16 @@ export default function App() {
      Admin route: /admin-vs-2024
      All hooks are declared above — only rendering is conditional.
      ---------------------------------------------------------- */
-  const isAdminRoute = window.location.pathname === '/admin-vs-2024'
+  // Robust admin route detection for dev/proxy environments.
+  // Handles:
+  // - trailing slash (/admin-vs-2024/)
+  // - query params (/admin-vs-2024?x=1)
+  // - base path / subdirectory deployments
+  const pathname = window.location.pathname.replace(/\/+$/, '')
+  const pathNoQuery = pathname.split('?')[0]
+  const isAdminRoute = pathNoQuery.endsWith('/admin-vs-2024')
+
+
 
   const handleAdminLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -806,7 +795,36 @@ export default function App() {
             setAdminMode(false)
           }}
         />
-        {/* Add your AdminReservations component here if available */}
+        {/* Render the full site in admin mode so Manage buttons appear (e.g. PostsSection). */}
+        {/* Reuse the normal homepage layout but keep adminMode enabled. */}
+        <div>
+          {/* NOTE: We keep the exact same structure as the normal render below. */}
+          {/* The headerScrolled / scrollToSection behavior is irrelevant for admin editing buttons, but PostsSection relies on adminMode via isAdminModeEnabled(). */}
+          <div className="grain-overlay" />
+          <BookingModal room={selectedRoom} isOpen={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleBookingSubmit} />
+          <HeroSection onLearnMore={() => scrollToSection('#rates')} />
+          <SectionDivider />
+          <PostsSection />
+          <SectionDivider />
+          <Rates rooms={rooms} onBook={openBookingModal} />
+          <SectionDivider />
+          <Amenities />
+          <SectionDivider />
+          <FindUs />
+          <SectionDivider />
+          <Packages onAskAboutThis={() => scrollToSection('#contact')} />
+          <SectionDivider />
+          <SectionDivider />
+          <ReviewsSection />
+          <SectionDivider />
+          <ContactSection
+            coralBtn={coralBtn}
+            sectionLabel={sectionLabel}
+            sectionHeading={sectionHeading}
+            sectionSubtitle={sectionSubtitle}
+            inputFieldStyle={inputFieldStyle}
+          />
+        </div>
       </div>
     )
   }
