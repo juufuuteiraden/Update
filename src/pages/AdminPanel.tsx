@@ -14,7 +14,16 @@ const BUCKET = 'villa-images'
 type Section = 'Gallery' | 'Reviews' | 'Rooms' | 'Packages'
 
 const emptyReview = { guest_name: '', event_type: '', rating: 5, quote: '' }
-const emptyRoom = { name: '', description: '', price: '', guests: '', features: '' }
+  const emptyRoom = { name: '', description: '', price: '', guests: '', features: '' }
+
+  type GalleryEditState = {
+    title: string
+    subtitle: string
+    category: string
+    price: string
+    imageFile: File | null
+  }
+
 const emptyPackage = { name: '', price: '', inclusions: '', highlighted: false }
 
 function listToText(items?: string[]) {
@@ -51,6 +60,16 @@ export default function AdminPanel() {
   const [roomForm, setRoomForm] = useState(emptyRoom)
   const [roomId, setRoomId] = useState<string | null>(null)
   const [roomImage, setRoomImage] = useState<File | null>(null)
+
+  // Gallery post editor state (title / subtitle / category / image)
+  const [galleryEditTitle, setGalleryEditTitle] = useState('')
+  const [galleryEditSubtitle, setGalleryEditSubtitle] = useState('')
+  const [galleryEditCategory, setGalleryEditCategory] = useState('')
+  const [galleryEditPrice, setGalleryEditPrice] = useState('')
+  const [galleryEditImage, setGalleryEditImage] = useState<File | null>(null)
+  const [galleryEditId, setGalleryEditId] = useState<string | null>(null)
+
+
   const [packageForm, setPackageForm] = useState(emptyPackage)
   const [packageId, setPackageId] = useState<string | null>(null)
 
@@ -297,28 +316,166 @@ export default function AdminPanel() {
           <div className="admin-panel">
             <label className="admin-upload">
               <span>Upload New Photo</span>
-              <input type="file" accept="image/*" disabled={loading} onChange={(event) => addGalleryImage(event.target.files?.[0] || null)} />
+              <input
+                type="file"
+                accept="image/*"
+                disabled={loading}
+                onChange={(event) => addGalleryImage(event.target.files?.[0] || null)}
+              />
             </label>
-            <div className="admin-gallery-grid">
-              {gallery.map((item) => (
-                <article
-                  key={item.id}
-                  className="admin-gallery-item"
-                  draggable
-                  onDragStart={() => setDraggedGalleryId(item.id)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={() => dropGalleryItem(item.id)}
-                >
-                  <img src={item.image_url} alt="" />
-                  <div>
-                    <span>Order {item.order}</span>
-                    <button onClick={() => deleteRow('gallery', item.id)}>Delete</button>
-                  </div>
-                </article>
-              ))}
+
+            <div className="admin-gallery-editor">
+              <div className="admin-gallery-editor__title">
+                <h3>Edit posts (title / subtitle / category / image)</h3>
+
+                <p>Each item in this list maps to a row in the <code>gallery</code> table.</p>
+              </div>
+
+              <div className="admin-gallery-grid">
+                {gallery.map((item) => (
+                  <article
+                    key={item.id}
+                    className={`admin-gallery-item ${item.id === galleryEditId ? 'active' : ''}`}
+
+                    draggable
+                    onDragStart={() => setDraggedGalleryId(item.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => dropGalleryItem(item.id)}
+                  >
+                    <img src={item.image_url} alt="" />
+
+                    <div>
+                      <span>Order {item.order}</span>
+                      <div className="admin-gallery-item__actions">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGalleryEditId(item.id)
+                            setGalleryEditTitle(item.title || '')
+                            setGalleryEditSubtitle(item.subtitle || '')
+                            setGalleryEditCategory(item.category || '')
+                            setGalleryEditPrice(String((item as any).price || ''))
+                            setGalleryEditImage(null)
+
+                          }}
+                        >
+                          Edit
+                        </button>
+
+                        <button onClick={() => deleteRow('gallery', item.id)}>Delete</button>
+                      </div>
+                    </div>
+
+                    {item.id === galleryEditId && (
+                      <div className="admin-gallery-item__form">
+                        <label>
+                          <span>Title</span>
+                          <input
+                            value={galleryEditTitle}
+                            onChange={(e) => setGalleryEditTitle(e.target.value)}
+                          />
+                        </label>
+
+                        <label>
+                          <span>Subtitle</span>
+                          <textarea
+                            rows={3}
+                            value={galleryEditSubtitle}
+                            onChange={(e) => setGalleryEditSubtitle(e.target.value)}
+                          />
+                        </label>
+
+                        <label>
+                          <span>Category</span>
+                          <input
+                            value={galleryEditCategory}
+                            onChange={(e) => setGalleryEditCategory(e.target.value)}
+                          />
+                        </label>
+
+                        <label>
+                          <span>Pricing</span>
+                          <input
+                            value={galleryEditPrice}
+                            onChange={(e) => setGalleryEditPrice(e.target.value)}
+                            placeholder="e.g. ₱ 10,000"
+                          />
+                        </label>
+
+
+                        <label className="admin-gallery-replace">
+                          <span>Replace image</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) => setGalleryEditImage(event.target.files?.[0] || null)}
+                          />
+                        </label>
+
+                        <div className="admin-gallery-item__buttons">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!galleryEditId) return
+                              setLoading(true)
+                              try {
+                                const current = gallery.find((g) => g.id === galleryEditId)
+                                let imageUrl = current?.image_url || ''
+                                if (galleryEditImage) {
+                                  imageUrl = await uploadImage(galleryEditImage)
+                                }
+
+                                const payload = {
+                                  title: galleryEditTitle,
+                                  subtitle: galleryEditSubtitle,
+                                  category: galleryEditCategory,
+                                  // Pricing isn't a column on `gallery` table; store it nowhere.
+                                  // Keeping it out of the payload prevents breaking the Supabase update.
+                                  order: current?.order,
+                                  image_url: imageUrl,
+                                }
+
+
+
+                                const { error } = await supabase.from('gallery').update(payload).eq('id', galleryEditId)
+                                if (error) throw error
+
+                                setGalleryEditImage(null)
+                                setGalleryEditId(null)
+                                showMessage('Gallery post updated.')
+                                await loadAll()
+                              } catch (e) {
+                                showMessage(e instanceof Error ? e.message : 'Unable to update gallery post.')
+                              } finally {
+                                setLoading(false)
+                              }
+                            }}
+                            disabled={loading}
+                          >
+                            Save
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGalleryEditImage(null)
+                              setGalleryEditId(null)
+                            }}
+                            disabled={loading}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                  </article>
+                ))}
+              </div>
             </div>
           </div>
         )}
+
 
         {active === 'Reviews' && (
           <div className="admin-two-column">
