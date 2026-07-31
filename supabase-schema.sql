@@ -77,11 +77,64 @@ create table if not exists rooms (
   features text[]
 );
 
-
 create table if not exists packages (
   id uuid default gen_random_uuid() primary key,
   name text,
+  description text default '',
   price text,
+  pax text default '',
+  badge text default '',
+  image_url text default '',
   inclusions text[],
   highlighted boolean default false
+);
+
+-- ============================================================
+-- New: Pricing & Access (walk-in rates)
+-- ============================================================
+create table if not exists rates_section (
+  id uuid default gen_random_uuid() primary key,
+  eyebrow text,
+  title text,
+  subtitle text
+);
+
+create table if not exists walk_in_rate (
+  id uuid default gen_random_uuid() primary key,
+  name text,
+  description text,
+  guests text,
+  badge text,
+  price_rows jsonb
+);
+
+-- ============================================================
+-- New: Amenities
+-- ============================================================
+create table if not exists amenities_section (
+  id uuid default gen_random_uuid() primary key,
+  eyebrow text,
+  title text,
+  subtitle text
+);
+
+create table if not exists amenities (
+  id uuid default gen_random_uuid() primary key,
+  name text,
+  description text,
+  image_url text
+);
+
+-- ============================================================
+-- New: Event Showcase
+-- ============================================================
+create table if not exists event_showcase (
+  id uuid default gen_random_uuid() primary key,
+  title text not null default '',
+  subtitle text not null default '',
+  description text not null default '',
+  price text not null default '',
+  image_url text not null default '',
+  category text not null default '',
+  "order" int not null default 0
 );

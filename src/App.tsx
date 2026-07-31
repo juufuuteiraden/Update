@@ -117,7 +117,7 @@ const fallbackSiteSettings: SiteSettings = {
    Admin constants
    ---------------------------------------------------------- */
 const ADMIN_USER = 'admin'
-const ADMIN_PASS = 'susanevilla_admin2026'
+const ADMIN_PASS = 'susanevilla2024'
 const SESSION_KEY = 'villa_susane_admin_session'
 
 /* ----------------------------------------------------------
