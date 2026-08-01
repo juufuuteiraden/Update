@@ -110,9 +110,15 @@
 /* ── Walk-In Rates Grid ── */
 .walkin-rates-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 1fr);
   gap: 1rem;
   margin-bottom: 3.5rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 1rem;
+  padding-bottom: 0.5rem;
 }
 
 .walkin-rate-card {
@@ -285,13 +291,20 @@
 
 .room-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(320px, 1fr);
   gap: 1.75rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 1rem;
+  padding-bottom: 0.5rem;
 }
 
 @media (min-width: 1024px) {
   .room-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: none;
+    grid-auto-columns: minmax(340px, 1fr);
   }
 }
 
@@ -639,7 +652,8 @@
   }
 
   .walkin-rates-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: none;
+    grid-auto-columns: minmax(240px, 1fr);
     gap: 0.5rem;
   }
 
@@ -652,7 +666,8 @@
   }
 
   .room-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: none;
+    grid-auto-columns: minmax(280px, 1fr);
     gap: 1.25rem;
   }
 
