@@ -171,14 +171,7 @@ export default function PostsSection() {
 
   // ── Default post inline management ──
   const [defaultPostEdits, setDefaultPostEdits] = useState<Record<string, { title: string; subtitle: string; category: string }>>({})
-  const [deletedDefaultIds, setDeletedDefaultIds] = useState<Set<string>>(new Set())
-
-const visibleDefaultPostsMerged = defaultPosts
-    .filter(p => !deletedDefaultIds.has(p.id))
-    .map(p => {
-      const edit = defaultPostEdits[p.id]
-      return edit ? { ...p, title: edit.title || p.title, subtitle: edit.subtitle || p.subtitle, category: edit.category || p.category } : p
-    })
+const [deletedDefaultIds, setDeletedDefaultIds] = useState<Set<string>>(new Set())
 
   const updateDefaultPostEdit = (id: string, patch: { title?: string; subtitle?: string; category?: string }) => {
     setDefaultPostEdits(prev => {
