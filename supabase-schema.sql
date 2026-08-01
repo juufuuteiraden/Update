@@ -108,6 +108,29 @@ create table if not exists walk_in_rate (
   price_rows jsonb
 );
 
+alter table walk_in_rate enable row level security;
+
+drop policy if exists "walk_in_rate public read" on walk_in_rate;
+create policy "walk_in_rate public read"
+  on walk_in_rate for select
+  using (true);
+
+drop policy if exists "walk_in_rate public insert" on walk_in_rate;
+create policy "walk_in_rate public insert"
+  on walk_in_rate for insert
+  with check (true);
+
+drop policy if exists "walk_in_rate public update" on walk_in_rate;
+create policy "walk_in_rate public update"
+  on walk_in_rate for update
+  using (true)
+  with check (true);
+
+drop policy if exists "walk_in_rate public delete" on walk_in_rate;
+create policy "walk_in_rate public delete"
+  on walk_in_rate for delete
+  using (true);
+
 -- ============================================================
 -- New: Amenities
 -- ============================================================

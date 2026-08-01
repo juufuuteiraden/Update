@@ -224,17 +224,8 @@ const visibleDefaultPostsMerged = defaultPosts
     }
   }
 
-  // Sync default post edits/deletes into galleryPosts so carousel reflects changes
-  useEffect(() => {
-    setGalleryPosts(prev => {
-      const showcase = prev.filter(p => p.showcaseId)
-      const uploaded = prev.filter(p => p.galleryId)
-      return [...visibleDefaultPostsMerged, ...showcase, ...uploaded]
-    })
-  }, [visibleDefaultPostsMerged])
 
-  // ── Event Showcase management (event_showcase table) ──
-  const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
+const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
   const [showcaseModalOpen, setShowcaseModalOpen] = useState(false)
   const [editingShowcaseId, setEditingShowcaseId] = useState<string | null>(null)
   const [savingShowcase, setSavingShowcase] = useState(false)
