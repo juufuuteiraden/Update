@@ -1,11 +1,16 @@
-# Manage Button - Edit/Delete Fallback Content + Undo + Room Descriptions
+# Supabase Auth Migration + RLS Security Hardening
+
+## Goal
+Migrate admin login from hardcoded credentials to Supabase Auth, harden RLS policies (authenticated-only writes), and get the build green.
 
 ## Progress
 
-- [x] **Amenities.tsx** - Restored & complete (inline editing, undo, image upload, save to DB)
-- [x] **Packages.tsx** - Complete (inline editing, undo, image upload, save to DB)
-- [x] **PostsSection.tsx** - Add Undo functionality for default post deletions
-- [x] **ReviewsSection.tsx** - Wire up image upload in save flow
-- [x] **Rates.tsx** - Enhance room inline editing with detailed inclusions fields (Bed, Bath, Room Type, etc.)
-- [x] Testing & verification - No compilation errors
+- [x] **Investigate** the in-progress changes (Supabase auth migration in App.tsx, AdminPanel credentials, schema/setup SQL, new rls-fix.sql)
+- [x] **Confirm build break** — `npx tsc --noEmit` reported:
+  - `src/App.tsx(120,7): error TS6133: 'ADMIN_EMAIL' is declared but its value is never read.`
+  - `src/App.tsx(121,7): error TS6133: 'ADMIN_PASS' is declared but its value is never read.`
+- [x] **Fix** — remove the unused `ADMIN_EMAIL` / `ADMIN_PASS` constants in `src/App.tsx` (login now uses `supabase.auth.signInWithPassword`)
+- [x] **Verify** — `npx tsc --noEmit -p tsconfig.app.json` passes with no errors (tsc-output.txt empty)
+- [ ] **Update TODO.md** — log completed Supabase auth migration / RLS security work
+- [ ] **Commit & push** the pending changes (Supabase auth migration + RLS SQL files)
 

@@ -3,8 +3,8 @@ import './AdminPanel.css'
 import { supabase } from '../supabaseClient'
 import type { GalleryItem, PackageItem, ReviewItem, RoomItem, ShowcaseItem, WalkInRateRow, AmenityRow } from '../supabaseTypes'
 
-const ADMIN_EMAIL = 'admin'
-const ADMIN_PASSWORD = 'susanevilla2024'
+const ADMIN_EMAIL = 'admin@villasusane.website'
+const ADMIN_PASSWORD = 'SusaneVilla2024!'
 
 const SESSION_KEY = 'villa_susane_admin_session'
 const BUCKET = 'villa-images'

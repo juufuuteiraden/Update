@@ -11,6 +11,7 @@ import PostsSection from './pages/PostsSection'
 import ReviewsSection from './pages/ReviewsSection'
 import AdminModeToolbar from './components/admin/AdminModeToolbar'
 import { isAdminModeEnabled } from './utils/adminMode'
+import { supabase } from './supabaseClient'
 import './components/admin/adminModeLogin.css'
 /* ----------------------------------------------------------
    Types
@@ -116,8 +117,6 @@ const fallbackSiteSettings: SiteSettings = {
 /* ----------------------------------------------------------
    Admin constants
    ---------------------------------------------------------- */
-const ADMIN_USER = 'admin'
-const ADMIN_PASS = 'susanevilla2024'
 const SESSION_KEY = 'villa_susane_admin_session'
 
 /* ----------------------------------------------------------
@@ -606,6 +605,31 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
+  // Restore Supabase admin session on mount + listen for auth changes
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        try { localStorage.setItem(SESSION_KEY, 'true') } catch { /* ignore */ }
+        setAdminAuth(true)
+        setAdminMode(true)
+      }
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        try { localStorage.setItem(SESSION_KEY, 'true') } catch { /* ignore */ }
+        setAdminAuth(true)
+        setAdminMode(true)
+      } else {
+        try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+        setAdminAuth(false)
+        setAdminMode(false)
+      }
+    })
+
+    return () => { listener.subscription.unsubscribe() }
+  }, [])
+
   const openBookingModal = useCallback((room: RoomData) => {
     setSelectedRoom(room)
     setModalOpen(true)
@@ -717,16 +741,20 @@ export default function App() {
 
 
 
-  const handleAdminLogin = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAdminLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (adminLogin.user === ADMIN_USER && adminLogin.password === ADMIN_PASS) {
-      try { localStorage.setItem(SESSION_KEY, 'true') } catch { /* ignore */ }
-      setAdminAuth(true)
-      setAdminMode(true)
-      setAdminLoginError('')
-    } else {
+    setAdminLoginError('')
+    const { error } = await supabase.auth.signInWithPassword({
+      email: adminLogin.user.trim(),
+      password: adminLogin.password,
+    })
+    if (error) {
       setAdminLoginError('Invalid admin credentials.')
+      return
     }
+    try { localStorage.setItem(SESSION_KEY, 'true') } catch { /* ignore */ }
+    setAdminAuth(true)
+    setAdminMode(true)
   }
 
   if (isAdminRoute && !adminAuth) {
@@ -789,7 +817,8 @@ export default function App() {
     return (
       <div>
         <AdminModeToolbar
-          onLogout={() => {
+          onLogout={async () => {
+            await supabase.auth.signOut()
             try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
             setAdminAuth(false)
             setAdminMode(false)
