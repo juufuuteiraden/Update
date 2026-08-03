@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId } from 'react'
 import { client } from '../sanityClient'
 import './ReviewsSection.css'
 import { supabase } from '../supabaseClient'
 import type { ReviewItem } from '../supabaseTypes'
 import AdminModal from '../components/admin/AdminModal'
+import ConfirmDialog from '../components/admin/ConfirmDialog'
+import { useToast } from '../components/admin/Toast'
 import { isAdminModeEnabled } from '../utils/adminMode'
+import { lockScroll, unlockScroll } from '../utils/scrollLock'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 
 type Review = {
@@ -64,6 +67,31 @@ const fallbackReviews: Review[] = [
 
 export default function ReviewsSection() {
   const showAdmin = isAdminModeEnabled() && window.location.pathname === '/admin-vs-2024'
+  const { showToast } = useToast()
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    message: string
+    variant?: 'danger' | 'default'
+    confirmLabel?: string
+    onConfirm: () => void
+  } | null>(null)
+
+  const openConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    options?: { variant?: 'danger' | 'default'; confirmLabel?: string },
+  ) => {
+    setConfirmDialog({
+      title,
+      message,
+      variant: options?.variant ?? 'danger',
+      confirmLabel: options?.confirmLabel,
+      onConfirm,
+    })
+  }
+
+  const lightboxLockId = useId()
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [activeFilter, setActiveFilter] = useState('All')
   const [content, setContent] = useState<ReviewsContent>(fallbackReviewsContent)
@@ -82,9 +110,15 @@ const visibleReviews = reviews.filter((r, idx) => {
 
   const deleteFallbackReview = (index: number) => {
     const review = reviews[index]
-    if (!window.confirm(`Remove "${review.author}'s" review from display?`)) return
-    setDeletedFallbackIndices(prev => new Set([...prev, index]))
-    showUndoReview(index, { edit: fallbackEdit[index], name: review.author })
+    openConfirm(
+      'Remove review from display?',
+      `Remove "${review.author}'s" review from display?`,
+      () => {
+        setDeletedFallbackIndices(prev => new Set([...prev, index]))
+        showUndoReview(index, { edit: fallbackEdit[index], name: review.author })
+        showToast(`Removed "${review.author}'s" review from display.`)
+      },
+    )
   }
 
   const saveFallbackReviewToDB = async (review: Review, originalIdx: number) => {
@@ -99,8 +133,9 @@ const visibleReviews = reviews.filter((r, idx) => {
       if (error) throw error
       setDeletedFallbackIndices(prev => new Set([...prev, originalIdx]))
       setFallbackEdit(prev => { const n={...prev}; delete n[originalIdx]; return n })
+      showToast('Review saved to database.')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save review')
+      showToast(err instanceof Error ? err.message : 'Unable to save review', 'error')
     } finally {
       setSavingReview(false)
     }
@@ -179,8 +214,9 @@ const visibleReviews = reviews.filter((r, idx) => {
       })
       .catch(() => {
         if (!isMounted) return
+        // Only reset the section headings. Do NOT reset `reviews` here —
+        // Supabase is the source of truth and must survive a Sanity failure.
         setContent(fallbackReviewsContent)
-        setReviews(fallbackReviews)
       })
 
     return () => {
@@ -235,12 +271,12 @@ const visibleReviews = reviews.filter((r, idx) => {
 
   const openLightbox = (image: string) => {
     setLightboxImage(image)
-    document.body.style.overflow = 'hidden'
+    lockScroll(lightboxLockId)
   }
 
   const closeLightbox = () => {
     setLightboxImage(null)
-    document.body.style.overflow = ''
+    unlockScroll(lightboxLockId)
   }
 
   // ── Review CRUD ──
@@ -269,17 +305,27 @@ const visibleReviews = reviews.filter((r, idx) => {
       resetReviewDraft()
       setReviewImageFile(null)
       setReviewModalOpen(false)
+      showToast(editingReviewId ? 'Review updated.' : 'Review added.')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save review')
+      showToast(err instanceof Error ? err.message : 'Unable to save review', 'error')
     } finally {
       setSavingReview(false)
     }
   }
 
   const deleteReview = async (id: string) => {
-    if (!window.confirm('Delete this review?')) return
-    const { error } = await supabase.from('reviews').delete().eq('id', id)
-    if (error) alert(error.message)
+    openConfirm(
+      'Delete this review?',
+      'This will permanently remove the review from the database.',
+      async () => {
+        const { error } = await supabase.from('reviews').delete().eq('id', id)
+        if (error) {
+          showToast(error.message, 'error')
+          return
+        }
+        showToast('Review deleted.')
+      },
+    )
   }
 
   const openEditReview = (review: Review & { dbId?: string }) => {
@@ -566,6 +612,20 @@ const visibleReviews = reviews.filter((r, idx) => {
           </div>
         </div>
       </AdminModal>
+
+{/* ── Custom Confirmation Dialog ── */}
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        variant={confirmDialog?.variant}
+        confirmLabel={confirmDialog?.confirmLabel}
+        onCancel={() => setConfirmDialog(null)}
+        onConfirm={async () => {
+          await confirmDialog?.onConfirm()
+          setConfirmDialog(null)
+        }}
+      />
     </section>
   )
 }

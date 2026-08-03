@@ -3,6 +3,8 @@ import { client } from '../sanityClient'
 import './Rates.css'
 import './RatesAdminPlaceholder.css'
 import AdminModal from '../components/admin/AdminModal'
+import ConfirmDialog from '../components/admin/ConfirmDialog'
+import { useToast } from '../components/admin/Toast'
 import { supabase } from '../supabaseClient'
 import type { RoomItem, WalkInRateRow } from '../supabaseTypes'
 import { isAdminModeEnabled } from '../utils/adminMode'
@@ -55,6 +57,29 @@ export default function Rates({
   onBook: (room: RateRoom) => void
 }) {
   const showAdmin = isAdminModeEnabled() && window.location.pathname === '/admin-vs-2024';
+  const { showToast } = useToast()
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    message: string
+    variant?: 'danger' | 'default'
+    confirmLabel?: string
+    onConfirm: () => void
+  } | null>(null)
+
+  const openConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    options?: { variant?: 'danger' | 'default'; confirmLabel?: string },
+  ) => {
+    setConfirmDialog({
+      title,
+      message,
+      variant: options?.variant ?? 'danger',
+      confirmLabel: options?.confirmLabel,
+      onConfirm,
+    })
+  }
 
 // Walk-In Rate management state
   const [walkInModalOpen, setWalkInModalOpen] = useState(false);
@@ -100,13 +125,18 @@ export default function Rates({
     })
   }
 
-  const deleteFallbackWalkIn = (index: number) => {
+const deleteFallbackWalkIn = (index: number) => {
     const name = rooms[index]?.name || 'this rate'
-    if (!window.confirm(`Remove "${name}" from display? Save to database first if needed.`)) return
-    setDeletedFallbackWalkInIndices(prev => new Set([...prev, index]))
-    // Save undo data
-    const original = rooms[index]
-    showUndoWalkIn(index, { edits: fallbackWalkInEdits[index], name: original?.name })
+    openConfirm(
+      'Remove walk-in rate?',
+      `Remove "${name}" from display? Save to database first if needed.`,
+      () => {
+        setDeletedFallbackWalkInIndices(prev => new Set([...prev, index]))
+        const original = rooms[index]
+        showUndoWalkIn(index, { edits: fallbackWalkInEdits[index], name: original?.name })
+        showToast(`Removed "${name}" from display.`)
+      },
+    )
   }
 
   const saveFallbackWalkInToDB = async (index: number) => {
@@ -128,8 +158,9 @@ export default function Rates({
       if (error) throw error
       setDeletedFallbackWalkInIndices(prev => new Set([...prev, index]))
       setFallbackWalkInEdits(prev => { const n = { ...prev }; delete n[index]; return n })
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save walk-in rate')
+      await loadWalkInRatesFromSupabase()
+} catch (err) {
+      showToast(err instanceof Error ? err.message : 'Unable to save walk-in rate', 'error')
     } finally {
       setSavingFallbackWalkIn(false)
     }
@@ -161,15 +192,24 @@ export default function Rates({
       ? await supabase.from('walk_in_rate').update(payload).eq('id', editingWalkInId)
       : await supabase.from('walk_in_rate').insert(payload);
     setSavingWalkIn(false);
-    if (error) { alert(error.message); return; }
+if (error) { showToast(error.message, 'error'); return; }
     resetWalkInDraft();
     setWalkInModalOpen(false);
+    showToast('Walk-in rate saved.');
+    await loadWalkInRatesFromSupabase();
   };
 
-  const deleteWalkInRate = async (id: string) => {
-    if (!window.confirm('Delete this walk-in rate?')) return;
-    const { error } = await supabase.from('walk_in_rate').delete().eq('id', id);
-    if (error) alert(error.message);
+const deleteWalkInRate = async (id: string) => {
+    openConfirm(
+      'Delete this walk-in rate?',
+      'This will permanently remove the walk-in rate from the database.',
+      async () => {
+        const { error } = await supabase.from('walk_in_rate').delete().eq('id', id);
+        if (error) { showToast(error.message, 'error'); return; }
+        showToast('Walk-in rate deleted.');
+        await loadWalkInRatesFromSupabase();
+      },
+    )
   };
 
   const loadWalkInRatesFromSupabase = async () => {
@@ -226,12 +266,18 @@ const [roomDraftImage, setRoomDraftImage] = useState<File | null>(null)
     })
   }
 
-  const deleteFallbackRoom = (index: number) => {
+const deleteFallbackRoom = (index: number) => {
     const name = hotelRooms[index]?.name || 'this room'
-    if (!window.confirm(`Remove "${name}" from display? Save to database first if needed.`)) return
-    setDeletedFallbackRoomIndices(prev => new Set([...prev, index]))
-    const original = hotelRooms[index]
-    showUndoRoom(index, { edits: fallbackRoomEdits[index], name: original?.name })
+    openConfirm(
+      'Remove room from display?',
+      `Remove "${name}" from display? Save to database first if needed.`,
+      () => {
+        setDeletedFallbackRoomIndices(prev => new Set([...prev, index]))
+        const original = hotelRooms[index]
+        showUndoRoom(index, { edits: fallbackRoomEdits[index], name: original?.name })
+        showToast(`Removed "${name}" from display.`)
+      },
+    )
   }
 
   const saveFallbackRoomToDB = async (index: number) => {
@@ -254,8 +300,8 @@ const [roomDraftImage, setRoomDraftImage] = useState<File | null>(null)
       if (error) throw error
       setDeletedFallbackRoomIndices(prev => new Set([...prev, index]))
       setFallbackRoomEdits(prev => { const n = { ...prev }; delete n[index]; return n })
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save room')
+} catch (err) {
+      showToast(err instanceof Error ? err.message : 'Unable to save room', 'error')
     } finally {
       setSavingFallbackRoom(false)
     }
@@ -393,94 +439,30 @@ const [roomDraftImage, setRoomDraftImage] = useState<File | null>(null)
   useEffect(() => {
     let isMounted = true
 
-    // Sanity fetches used to render walk-in rates + section titles.
-    Promise.all([
-      client.fetch<Partial<RatesContent> | null>(`
-        *[_type == "ratesSection"][0]{
-          walkInEyebrow,
-          walkInTitle,
-          walkInSubtitle,
-          roomsEyebrow,
-          roomsTitle
-        }
-      `),
-      client.fetch<Array<Omit<RateRoom, 'id' | 'image'> & { _id: string }>>(`
-        *[_type == "walkInRate"] | order(_createdAt asc){
-          _id,
-          name,
-          description,
-          guests,
-          badge,
-          priceRows
-        }
-      `),
-      client.fetch<Array<Omit<RateRoom, 'id' | 'image' | 'inclusions' | 'images'> & {
-        _id: string
-        inclusions?: { label: string; value: string }[]
-        images?: { url: string; label: string }[]
-      }>>(`
-        *[_type == "room"] | order(_createdAt asc){
-          _id,
-          name,
-          description,
-          price,
-          guests,
-          badge,
-          inclusions[]{label, value},
-          "images": images[]{label, "url": image.asset->url}
-        }
-      `),
-    ])
-      .then(([sectionData, walkInData, roomData]) => {
+    // Sanity is used for the section headings only (with fallback).
+    // Walk-in rates and rooms are loaded from Supabase below, so a Sanity
+    // failure must NOT clear the Supabase-loaded content.
+    client.fetch<Partial<RatesContent> | null>(`
+      *[_type == "ratesSection"][0]{
+        walkInEyebrow,
+        walkInTitle,
+        walkInSubtitle,
+        roomsEyebrow,
+        roomsTitle
+      }
+    `)
+      .then((sectionData) => {
         if (!isMounted) return
-
         if (sectionData) {
           setContent({
             ...fallbackRatesContent,
             ...sectionData,
           })
         }
-
-        if (walkInData.length) {
-          setWalkInRates(
-            walkInData.map((rate, index) => ({
-              id: index + 1,
-              name: rate.name,
-              description: rate.description,
-              price: rate.price || rate.priceRows?.[0]?.price || '',
-              guests: rate.guests,
-              image: '',
-              badge: rate.badge,
-              priceRows: rate.priceRows,
-            })),
-          )
-        }
-
-        if (roomData.length) {
-          setCmsRooms(
-            roomData.map((room, index) => {
-              const fallbackRoom = hotelRooms[index % hotelRooms.length]
-              const images = room.images?.filter((image) => image.url) || []
-
-              return {
-                ...fallbackRoom,
-                ...room,
-                id: index + 101,
-                image: images[0]?.url || fallbackRoom.image,
-                images: images.length ? images : fallbackRoom.images,
-                inclusions: room.inclusions?.length
-                  ? room.inclusions.map((item) => ({ icon: '', ...item }))
-                  : fallbackRoom.inclusions,
-              }
-            }),
-          )
-        }
       })
       .catch(() => {
         if (!isMounted) return
         setContent(fallbackRatesContent)
-        setWalkInRates([])
-        setCmsRooms([])
       })
 
     return () => {
@@ -548,11 +530,20 @@ const [roomDraftImage, setRoomDraftImage] = useState<File | null>(null)
     setAdminModalOpen(true)
   }
 
-  const deleteRoom = async (room: RateRoom) => {
+const deleteRoom = async (room: RateRoom) => {
     if (!room.dbId) return
-    if (!window.confirm('Delete this room?')) return
-    const { error } = await supabase.from('rooms').delete().eq('id', room.dbId)
-    if (error) alert(error.message)
+    openConfirm(
+      'Delete this room?',
+      'This will permanently remove the room from the database.',
+      async () => {
+        const { error } = await supabase.from('rooms').delete().eq('id', room.dbId)
+        if (error) {
+          showToast(error.message, 'error')
+          return
+        }
+        showToast('Room deleted.')
+      },
+    )
   }
 
   const saveRoom = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -582,8 +573,8 @@ const [roomDraftImage, setRoomDraftImage] = useState<File | null>(null)
       setAdminModalOpen(false)
       resetRoomDraft()
       await loadRoomsOnce()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save room')
+} catch (err) {
+      showToast(err instanceof Error ? err.message : 'Unable to save room', 'error')
     } finally {
       setSavingRoom(false)
     }
@@ -1126,8 +1117,8 @@ const [roomDraftImage, setRoomDraftImage] = useState<File | null>(null)
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {displayedRooms.filter(r => r.dbId).map((room) => (
                   <div key={room.dbId} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', background: 'var(--section-white)', border: '1px solid rgba(0,109,119,0.12)', borderRadius: '10px' }}>
-                    {room.image && (
-                      <img src={room.image} alt="" style={{ width: '48px', height: '48px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
+{room.image && (
+                      <img src={room.image} alt="" style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong style={{ fontSize: '0.9rem', color: '#1A2B2C' }}>{room.name}</strong>
@@ -1221,7 +1212,21 @@ const [roomDraftImage, setRoomDraftImage] = useState<File | null>(null)
             </form>
           </div>
         </div>
-      </AdminModal>
+</AdminModal>
+
+{/* ── Confirm Dialog ── */}
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        variant={confirmDialog?.variant}
+        confirmLabel={confirmDialog?.confirmLabel}
+        onCancel={() => setConfirmDialog(null)}
+        onConfirm={async () => {
+          await confirmDialog?.onConfirm()
+          setConfirmDialog(null)
+        }}
+      />
     </section>
   )
 }

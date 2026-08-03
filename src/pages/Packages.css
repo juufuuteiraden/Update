@@ -270,10 +270,11 @@
 .package-meta {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-end;
+  gap: 0.75rem;
   margin-top: auto;
-  margin-bottom: 1.25rem;
-  padding-bottom: 1rem;
+  margin-bottom: 0.6rem;
+  padding: 0 1.75rem 0.9rem;
   border-bottom: 1px solid var(--border, rgba(0, 109, 119, 0.12));
 }
 
@@ -310,18 +311,20 @@
 
 .package-pax {
   font-family: 'Inter', sans-serif;
-  font-weight: 400;
-  font-size: 0.85rem;
-  color: var(--muted, #6B7B7C);
-  display: flex;
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--teal, #006D77);
+  background: rgba(0, 109, 119, 0.08);
+  border: 1px solid rgba(0, 109, 119, 0.16);
+  padding: 0.32rem 0.7rem;
+  border-radius: 40px;
+  display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-}
-
-.package-pax::before {
-  content: '•';
-  font-size: 1.2rem;
-  color: var(--jade, #2A9D8F);
+  gap: 0.38rem;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ── Button ── */

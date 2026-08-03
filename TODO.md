@@ -1,16 +1,27 @@
-# Supabase Auth Migration + RLS Security Hardening
+# Scroll Lock Fix Plan
 
-## Goal
-Migrate admin login from hardcoded credentials to Supabase Auth, harden RLS policies (authenticated-only writes), and get the build green.
+## Problem
+When deleting content inside the Manage modal, the page scroll becomes permanently stuck because the scroll lock token from `useId()` can change on component remount, causing orphaned locks in the `activeLocks` set.
 
-## Progress
+## Fix Steps
 
-- [x] **Investigate** the in-progress changes (Supabase auth migration in App.tsx, AdminPanel credentials, schema/setup SQL, new rls-fix.sql)
-- [x] **Confirm build break** — `npx tsc --noEmit` reported:
-  - `src/App.tsx(120,7): error TS6133: 'ADMIN_EMAIL' is declared but its value is never read.`
-  - `src/App.tsx(121,7): error TS6133: 'ADMIN_PASS' is declared but its value is never read.`
-- [x] **Fix** — remove the unused `ADMIN_EMAIL` / `ADMIN_PASS` constants in `src/App.tsx` (login now uses `supabase.auth.signInWithPassword`)
-- [x] **Verify** — `npx tsc --noEmit -p tsconfig.app.json` passes with no errors (tsc-output.txt empty)
-- [x] **Update TODO.md** — log completed Supabase auth migration / RLS security work
-- [x] **Commit & push** — `6219182 feat: migrate admin auth to Supabase + harden RLS policies` pushed to `main` (6 files, +532/−110)
+### 1. Fix `src/utils/scrollLock.ts` ✅
+- Added a safety net (`restoreBodyOverflow`) that force-restores the body overflow when the token registry is empty but the body is still locked.
+- Baked the safety net into `unlockScroll()` so all callers (including the ReviewsSection lightbox) are protected.
+- Added `stableUnlockScroll()` as a guarded unlock wrapper.
+- Kept `unlockAllScroll()` for force-clearing on logout / Escape.
+
+### 2. Fix `src/components/admin/AdminModal.tsx` ✅
+- Replaced `useId()` with a stable ref-based lock token that survives remounts/re-renders.
+- Cleanup uses `stableUnlockScroll()` so a stale token can never leave the page unscrollable.
+
+### 3. Fix `src/components/admin/ConfirmDialog.tsx` ✅
+- Replaced `useId()` with a stable ref-based lock token.
+- Cleanup uses `stableUnlockScroll()`.
+
+### 4. Verify TypeScript compilation cleanly ✅
+- `npx tsc --noEmit` exits with code 0 (no type errors).
+
+### 5. Close the loop — ensure none of the "Manage" flows leave scroll locked ✅
+- AdminModal + ConfirmDialog now use stable tokens + safety-net unlock, covering the delete flow in PostsSection, Rates, Packages, Amenities, ReviewsSection, and AdminPanel.
 

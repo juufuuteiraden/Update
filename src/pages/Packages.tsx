@@ -4,8 +4,10 @@ import './Packages.css';
 import { supabase } from '../supabaseClient';
 import type { PackageItem } from '../supabaseTypes';
 import AdminModal from '../components/admin/AdminModal';
+import ConfirmDialog from '../components/admin/ConfirmDialog';
+import { useToast } from '../components/admin/Toast';
 import { isAdminModeEnabled } from '../utils/adminMode';
-import { Plus, Edit, Trash2, Upload, Save } from 'lucide-react';
+import { Plus, Edit, Trash2, Upload, Save, Users } from 'lucide-react';
 
 interface PackageData {
   id?: string
@@ -56,11 +58,24 @@ const uploadImage = async (file: File) => {
 
 export default function Packages({ onAskAboutThis }: { onAskAboutThis: () => void }) {
   const showAdmin = isAdminModeEnabled() && window.location.pathname === '/admin-vs-2024';
+  const { showToast } = useToast();
   const [packageModalOpen, setPackageModalOpen] = useState(false);
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
   const [savingPackage, setSavingPackage] = useState(false);
   const [packageDraft, setPackageDraft] = useState<PackageDraft>({ name: '', description: '', price: '', pax: '', badge: '', image_url: '', inclusions: '', highlighted: false });
   const [packageDraftFile, setPackageDraftFile] = useState<File | null>(null);
+  // ── Confirm Dialog state ──
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    message: string
+    variant?: 'danger' | 'default'
+    confirmLabel?: string
+    onConfirm: () => void
+  } | null>(null)
+
+  const openConfirm = (title: string, message: string, onConfirm: () => void, variant?: 'danger' | 'default') => {
+    setConfirmDialog({ title, message, onConfirm, variant })
+  }
   // ── Undo stack for fallback deletions ──
   const [undoFallback, setUndoFallback] = useState<{ index: number; data: any; timer: number } | null>(null)
 
@@ -82,11 +97,17 @@ export default function Packages({ onAskAboutThis }: { onAskAboutThis: () => voi
     });
   };
 
-  const deleteFallbackPackage = (index: number) => {
+const deleteFallbackPackage = (index: number) => {
     const name = fallbackPackages[index]?.title || 'this package';
-    if (!window.confirm(`Remove "${name}" from display? You can save it to the database first.`)) return;
-    setDeletedFallbackIndices(prev => new Set([...prev, index]));
-    showUndoPackage(index, { edits: fallbackEdits[index], name });
+    openConfirm(
+      'Remove package from display?',
+      `Remove "${name}" from display? You can save it to the database first.`,
+      () => {
+        setDeletedFallbackIndices(prev => new Set([...prev, index]));
+        showUndoPackage(index, { edits: fallbackEdits[index], name });
+        showToast(`Removed "${name}" from display.`);
+      },
+    );
   };
 
   const saveFallbackToDB = async (index: number) => {
@@ -105,8 +126,8 @@ export default function Packages({ onAskAboutThis }: { onAskAboutThis: () => voi
       if (error) throw error;
       setDeletedFallbackIndices(prev => new Set([...prev, index]));
       setFallbackEdits(prev => { const n = { ...prev }; delete n[index]; return n; });
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save package');
+} catch (err) {
+      showToast(err instanceof Error ? err.message : 'Unable to save package', 'error');
     } finally {
       setSavingFallbackToDB(false);
     }
@@ -161,10 +182,10 @@ export default function Packages({ onAskAboutThis }: { onAskAboutThis: () => voi
     setPackageDraftFile(null);
   };
 
-  const savePackage = async (event: React.FormEvent<HTMLFormElement>) => {
+const savePackage = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editingPackageId && !packageDraftFile) {
-      alert('Please select an image.');
+      showToast('Please select an image.', 'error');
       return;
     }
     setSavingPackage(true);
@@ -192,17 +213,28 @@ export default function Packages({ onAskAboutThis }: { onAskAboutThis: () => voi
       if (error) throw error;
       resetPackageDraft();
       setPackageModalOpen(false);
+      showToast(editingPackageId ? 'Package updated.' : 'Package added.', 'success');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save package');
+      showToast(err instanceof Error ? err.message : 'Unable to save package', 'error');
     } finally {
       setSavingPackage(false);
     }
   };
 
   const deletePackage = async (id: string) => {
-    if (!window.confirm('Delete this package?')) return;
-    const { error } = await supabase.from('packages').delete().eq('id', id);
-    if (error) alert(error.message);
+    openConfirm(
+      'Delete this package?',
+      'Are you sure you want to permanently delete this package?',
+      async () => {
+        const { error } = await supabase.from('packages').delete().eq('id', id);
+        if (error) {
+          showToast(error.message, 'error');
+          return;
+        }
+        showToast('Package deleted.', 'success');
+      },
+      'danger',
+    );
   };
 
   const openEditPackage = (pkg: PackageData) => {
@@ -235,7 +267,12 @@ export default function Packages({ onAskAboutThis }: { onAskAboutThis: () => voi
           return { ...fallback, ...pkg, images: pkg.images?.length ? pkg.images : fallback.images, includes: pkg.includes?.length ? pkg.includes : fallback.includes };
         }));
       }
-    }).catch(() => { if (!isMounted) return; setContent(fallbackPackagesContent); setPackages(fallbackPackages); });
+    }).catch(() => {
+      if (!isMounted) return
+      // Only reset the section headings. Do NOT reset `packages` here —
+      // Supabase is the source of truth and must survive a Sanity failure.
+      setContent(fallbackPackagesContent)
+    });
     return () => { isMounted = false; };
   }, []);
 
@@ -350,12 +387,15 @@ return (
                       <span className="price-label">Package Rate</span>
                       <span className="price-amount" data-sanity="packageItem.price">{pkg.price}</span>
                     </div>
-                    <div className="package-pax" data-sanity="packageItem.pax">{pkg.pax}</div>
-                    <button className="package-button" onClick={onAskAboutThis}>
-                      <span>Ask About This</span>
-                      <svg className="button-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    </button>
+                    <div className="package-pax" data-sanity="packageItem.pax">
+                      <Users size={14} aria-hidden="true" />
+                      <span>{pkg.pax}</span>
+                    </div>
                   </div>
+                  <button className="package-button" onClick={onAskAboutThis}>
+                    <span>Ask About This</span>
+                    <svg className="button-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
                 </div>
               </div>
             ))}
@@ -459,8 +499,8 @@ const currentBadge = (edit?.badge ?? pkg.badge) || ''
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {packages.filter(p => p.id).map((pkg) => (
                   <div key={pkg.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', background: 'var(--section-white)', border: '1px solid rgba(0,109,119,0.12)', borderRadius: '10px' }}>
-                    {pkg.images?.[0] && (
-                      <img src={pkg.images[0]} alt="" style={{ width: '48px', height: '48px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
+{pkg.images?.[0] && (
+                      <img src={pkg.images[0]} alt="" style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong style={{ fontSize: '0.9rem', color: '#1A2B2C' }}>{pkg.title}</strong>
@@ -558,7 +598,23 @@ const currentBadge = (edit?.badge ?? pkg.badge) || ''
             </form>
           </div>
         </div>
-      </AdminModal>
+</AdminModal>
+
+{/* ── Confirm Dialog ── */}
+      {confirmDialog && (
+        <ConfirmDialog
+          open={!!confirmDialog}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          variant={confirmDialog.variant}
+          confirmLabel={confirmDialog.confirmLabel || 'Confirm'}
+          onConfirm={async () => {
+            await confirmDialog.onConfirm();
+            setConfirmDialog(null);
+          }}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
     </>
   )
 }

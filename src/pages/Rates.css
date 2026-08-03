@@ -116,9 +116,30 @@
   margin-bottom: 3.5rem;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x mandatory;
+  scroll-snap-type: x proximity;
   scroll-padding: 1rem;
-  padding-bottom: 0.5rem;
+  padding-bottom: 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--teal) rgba(0, 109, 119, 0.12);
+}
+
+.walkin-rates-grid::-webkit-scrollbar {
+  height: 10px;
+}
+
+.walkin-rates-grid::-webkit-scrollbar-track {
+  background: rgba(0, 109, 119, 0.1);
+  border-radius: 999px;
+}
+
+.walkin-rates-grid::-webkit-scrollbar-thumb {
+  background: var(--teal);
+  border-radius: 999px;
+  border: 2px solid rgba(0, 109, 119, 0.1);
+}
+
+.walkin-rates-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--teal-light);
 }
 
 .walkin-rate-card {
@@ -296,9 +317,30 @@
   gap: 1.75rem;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x mandatory;
+  scroll-snap-type: x proximity;
   scroll-padding: 1rem;
-  padding-bottom: 0.5rem;
+  padding-bottom: 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--teal) rgba(0, 109, 119, 0.12);
+}
+
+.room-grid::-webkit-scrollbar {
+  height: 10px;
+}
+
+.room-grid::-webkit-scrollbar-track {
+  background: rgba(0, 109, 119, 0.1);
+  border-radius: 999px;
+}
+
+.room-grid::-webkit-scrollbar-thumb {
+  background: var(--teal);
+  border-radius: 999px;
+  border: 2px solid rgba(0, 109, 119, 0.1);
+}
+
+.room-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--teal-light);
 }
 
 @media (min-width: 1024px) {

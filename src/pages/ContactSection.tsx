@@ -1,22 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { client } from '../sanityClient'
-
+import { BedDouble, Package, PartyPopper, Waves, MessageCircleQuestion } from 'lucide-react'
 import './ContactSection.css'
 
-type PackageInquiry = {
-  packageName: string
+/* ── Types ── */
+type InquiryCategory = 'rooms' | 'packages' | 'occasions' | 'amenities' | 'general'
+
+type InquiryData = {
+  interest: string
   eventType: string
   guestCount: string
   eventDate: string
+  budget: string
   name: string
   phone: string
   email: string
   notes: string
-}
-
-type GeneralInquiry = {
-  email: string
-  message: string
 }
 
 type ContactContent = {
@@ -29,16 +28,42 @@ type ContactContent = {
   facebookPage: string
 }
 
+/* ── Category config ── */
+const CATEGORIES: { id: InquiryCategory; label: string; icon: React.ReactNode; blurb: string }[] = [
+  { id: 'rooms', label: 'Rooms & Rates', icon: <BedDouble size={16} />, blurb: 'Book a stay, check availability, or ask about our walk-in rates.' },
+  { id: 'packages', label: 'Event Packages', icon: <Package size={16} />, blurb: 'Let us shape the right package for your celebration.' },
+  { id: 'occasions', label: 'Events & Occasions', icon: <PartyPopper size={16} />, blurb: 'Birthdays, debuts, weddings, corporate events — we host them all.' },
+  { id: 'amenities', label: 'Amenities', icon: <Waves size={16} />, blurb: 'Pool access, billiards, food & beverage, and more.' },
+  { id: 'general', label: 'General Question', icon: <MessageCircleQuestion size={16} />, blurb: 'Something else on your mind? Ask us anything.' },
+]
+
+const CATEGORY_LABELS: Record<InquiryCategory, string> = {
+  rooms: 'Rooms & Rates',
+  packages: 'Event Packages',
+  occasions: 'Events & Occasions',
+  amenities: 'Amenities',
+  general: 'General Question',
+}
+
+const INTEREST_LABELS: Record<Exclude<InquiryCategory, 'general'>, string> = {
+  rooms: 'Room of Interest',
+  packages: 'Package of Interest',
+  occasions: 'Occasion Type',
+  amenities: 'Amenity of Interest',
+}
+
+/* ── Content fallback ── */
 const fallbackContactContent: ContactContent = {
-  eyebrow: 'PACKAGE INQUIRY',
-  title: 'Tell Us About Your Event',
-  subtitle: 'Share the first few details and we will help shape the right package with you.',
-  formIntro: 'Share the basics and we will recommend the next step.',
+  eyebrow: 'INQUIRE',
+  title: 'Plan Your Visit',
+  subtitle: 'Whether it’s a stay, an event, or a simple question — we’re here to help.',
+  formIntro: 'Choose a category and share a few details. We’ll take it from there.',
   directPhone: '0929 479 9835',
   directEmail: 'balambanbooking@gmail.com',
   facebookPage: 'facebook.com/villasusane.roomsnvenue',
 }
 
+/* ── Option lists ── */
 const fallbackPackageOptions = [
   'Phase 1 Area Package',
   'Food Package with Pool Access',
@@ -47,6 +72,46 @@ const fallbackPackageOptions = [
   'Not sure yet',
 ]
 
+const roomOptions = [
+  'Rooms Pool View',
+  'Day Use Room',
+  'Standard Room',
+  'Walk-in Pool Access',
+  'Not sure yet',
+]
+
+const amenityOptions = [
+  'Resort Pool',
+  'Billiards Room',
+  'Catering & Events',
+  'Food & Beverages',
+  'Air Conditioned Rooms',
+  'Free WiFi',
+  'Night Pools',
+  'Not sure yet',
+]
+
+const occasionOptions = [
+  'Birthday Party',
+  'Wedding Reception',
+  'Debut / 18th Birthday',
+  'Christening',
+  'Corporate Event',
+  'Reunion / Family Gathering',
+  'Holiday Party',
+  'Other',
+]
+
+const guestRanges = [
+  '1-10 people',
+  '10-20 people',
+  '20-30 people',
+  '30-50 people',
+  '50-100 people',
+  '100+ people',
+]
+
+/* ── Helpers ── */
 function formatDisplayDate(value: string) {
   if (!value) return 'Flexible / to be discussed'
 
@@ -60,22 +125,32 @@ function formatDisplayDate(value: string) {
   }).format(new Date(year, month - 1, day))
 }
 
-const initialInquiry: PackageInquiry = {
-  packageName: '',
+/** Strip a leading peso sign if the user pasted one, then re-add it. */
+const PESO_SIGN = '\u20B1' // ₱
+function formatPeso(value: string): string {
+  // Remove any non-digit characters except comma and period
+  const cleaned = value.replace(/[^\d.,]/g, '')
+  return PESO_SIGN + cleaned
+}
+
+/** Strip the peso prefix when reading from the input for storage. */
+function stripPeso(value: string): string {
+  return value.replace(PESO_SIGN, '').trim()
+}
+
+const initialInquiry: InquiryData = {
+  interest: '',
   eventType: '',
   guestCount: '',
   eventDate: '',
+  budget: '',
   name: '',
   phone: '',
   email: '',
   notes: '',
 }
 
-const initialGeneralInquiry: GeneralInquiry = {
-  email: '',
-  message: '',
-}
-
+/* ── Component ── */
 export default function ContactSection({
   coralBtn,
   sectionLabel,
@@ -89,15 +164,13 @@ export default function ContactSection({
   sectionSubtitle: React.CSSProperties
   inputFieldStyle: React.CSSProperties
 }) {
-  const [formData, setFormData] = useState<PackageInquiry>(initialInquiry)
+  const [activeCategory, setActiveCategory] = useState<InquiryCategory>('packages')
+  const [formData, setFormData] = useState<InquiryData>(initialInquiry)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [formMessage, setFormMessage] = useState('')
   const dateInputRef = useRef<HTMLInputElement>(null)
 
-  const [generalInquiry, setGeneralInquiry] = useState<GeneralInquiry>(initialGeneralInquiry)
-  const [generalSending, setGeneralSending] = useState(false)
-  const [generalMessage, setGeneralMessage] = useState('')
   const [content, setContent] = useState<ContactContent>(fallbackContactContent)
   const [packageOptions, setPackageOptions] = useState<string[]>(fallbackPackageOptions)
 
@@ -153,7 +226,22 @@ export default function ContactSection({
     }
   }, [])
 
-  const updateField = (field: keyof PackageInquiry, value: string) => {
+  const switchCategory = (id: InquiryCategory) => {
+    setActiveCategory(id)
+    setReviewOpen(false)
+    setFormMessage('')
+    setFormData((cur) => ({
+      ...cur,
+      interest: '',
+      eventType: '',
+      guestCount: '',
+      eventDate: '',
+      budget: '',
+      notes: '',
+    }))
+  }
+
+  const updateField = (field: keyof InquiryData, value: string) => {
     setFormData((current) => ({ ...current, [field]: value }))
     setFormMessage('')
   }
@@ -179,16 +267,19 @@ export default function ContactSection({
     setIsSending(true)
     setFormMessage('')
 
+    const categoryLabel = CATEGORY_LABELS[activeCategory]
     const payload = new FormData()
-    payload.append('subject', `${formData.packageName} Package Inquiry!`)
-    payload.append('Package of Interest', formData.packageName)
-    payload.append('Event Type', formData.eventType)
-    payload.append('Approximate Guests', formData.guestCount)
-    payload.append('Preferred Event Date', formatDisplayDate(formData.eventDate))
+    payload.append('subject', `${categoryLabel} Inquiry!`)
+    payload.append('Inquiry Category', categoryLabel)
+    if (formData.interest) payload.append('Interest', formData.interest)
+    if (formData.eventType) payload.append('Event Type', formData.eventType)
+    if (formData.guestCount) payload.append('Approximate Guests', formData.guestCount)
+    if (formData.eventDate) payload.append('Preferred Date', formatDisplayDate(formData.eventDate))
+    if (formData.budget) payload.append('Budget', formData.budget)
     payload.append('Full Name', formData.name)
-    payload.append('Phone', formData.phone)
+    if (formData.phone) payload.append('Phone', formData.phone)
     payload.append('Email', formData.email)
-    payload.append('Event Notes', formData.notes || 'None')
+    payload.append('Message / Notes', formData.notes || 'None')
 
     try {
       const response = await fetch('https://formspree.io/f/mlgvrkjd', {
@@ -201,7 +292,7 @@ export default function ContactSection({
 
       setFormData(initialInquiry)
       setReviewOpen(false)
-      setFormMessage('Package inquiry sent. We will reply with availability and next steps.')
+      setFormMessage(`${categoryLabel} inquiry sent. We will reply with availability and next steps.`)
     } catch {
       setFormMessage('We could not send the inquiry right now. Please try again in a moment.')
     } finally {
@@ -209,37 +300,476 @@ export default function ContactSection({
     }
   }
 
-  const sendGeneralInquiry = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  /* ── Dynamic category-specific fields ── */
+  const renderCategoryFields = () => {
+    switch (activeCategory) {
+      case 'rooms':
+        return (
+          <>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="roomInterest">
+                  Room of Interest
+                </label>
+                <select
+                  id="roomInterest"
+                  className="form-input form-select"
+                  value={formData.interest}
+                  onChange={(event) => updateField('interest', event.target.value)}
+                >
+                  <option value="" disabled>
+                    Select room
+                  </option>
+                  {roomOptions.map((option) => (
+                    <option value={option} key={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-    setGeneralSending(true)
-    setGeneralMessage('')
+              <div className="form-group">
+                <label className="form-label" htmlFor="stayDate">
+                  Preferred Stay Date
+                </label>
+                <input
+                  id="stayDate"
+                  type="date"
+                  className="form-input"
+                  value={formData.eventDate}
+                  onChange={(event) => updateField('eventDate', event.target.value)}
+                />
+              </div>
+            </div>
 
-    const payload = new FormData()
-    payload.append('subject', 'Resort Question/Inquiry')
-    payload.append('Email', generalInquiry.email)
-    payload.append('Message', generalInquiry.message)
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="roomGuests">
+                  Guests
+                </label>
+                <select
+                  id="roomGuests"
+                  className="form-input form-select"
+                  value={formData.guestCount}
+                  onChange={(event) => updateField('guestCount', event.target.value)}
+                >
+                  <option value="" disabled>
+                    Select range
+                  </option>
+                  {guestRanges.map((option) => (
+                    <option value={option} key={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-    try {
-      const response = await fetch('https://formspree.io/f/mlgvrkjd', {
-        method: 'POST',
-        body: payload,
-        headers: { Accept: 'application/json' },
-      })
+              <div className="form-group">
+                <label className="form-label" htmlFor="roomBudget">
+                  Budget per Night (optional)
+                </label>
+                <input
+                  id="roomBudget"
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. 2,500"
+                  inputMode="numeric"
+                  value={stripPeso(formData.budget)}
+                  onChange={(event) => {
+                    const raw = event.target.value
+                    // Only allow digits, commas, and dots
+                    if (/^[\d,.]*$/.test(raw)) {
+                      updateField('budget', formatPeso(raw))
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </>
+        )
 
-      if (!response.ok) throw new Error('Unable to send inquiry.')
+      case 'packages':
+        return (
+          <>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="packageInterest">
+                  Package of Interest
+                </label>
+                <select
+                  id="packageInterest"
+                  className="form-input form-select"
+                  value={formData.interest}
+                  onChange={(event) => updateField('interest', event.target.value)}
+                  required
+                >
+                  <option value="" disabled>
+                    Select package
+                  </option>
+                  {packageOptions.map((option) => (
+                    <option value={option} key={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-      setGeneralInquiry(initialGeneralInquiry)
-      setGeneralMessage('Message sent. We will get back to you soon.')
-    } catch {
-      setGeneralMessage('We could not send the message right now. Please try again in a moment.')
-    } finally {
-      setGeneralSending(false)
+              <div className="form-group">
+                <label className="form-label" htmlFor="packageDate">
+                  Preferred Event Date
+                </label>
+                <div className="package-date-shell">
+                  <input
+                    ref={dateInputRef}
+                    id="packageDate"
+                    type="date"
+                    className="form-input package-date-input"
+                    value={formData.eventDate}
+                    onChange={(event) => updateField('eventDate', event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="package-date-button"
+                    onClick={openDatePicker}
+                    aria-label="Open event date picker"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.7" />
+                      <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="packageEventType">
+                  Event Type
+                </label>
+                <input
+                  id="packageEventType"
+                  type="text"
+                  className="form-input"
+                  placeholder="Birthday, reunion, christening..."
+                  value={formData.eventType}
+                  onChange={(event) => updateField('eventType', event.target.value)}
+                />
+              </div>
+
+<div className="form-group">
+                <label className="form-label" htmlFor="packageGuests">
+                  Approximate Guests
+                </label>
+                <select
+                  id="packageGuests"
+                  className="form-input form-select"
+                  value={formData.guestCount}
+                  onChange={(event) => updateField('guestCount', event.target.value)}
+                >
+                  <option value="" disabled>
+                    Select range
+                  </option>
+                  {guestRanges.map((option) => (
+                    <option value={option} key={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="packageBudget">
+                Budget (optional)
+              </label>
+              <input
+                id="packageBudget"
+                type="text"
+                className="form-input"
+                placeholder="e.g. 35,000"
+                inputMode="numeric"
+                value={stripPeso(formData.budget)}
+                onChange={(event) => {
+                  const raw = event.target.value
+                  if (/^[\d,.]*$/.test(raw)) {
+                    updateField('budget', formatPeso(raw))
+                  }
+                }}
+              />
+            </div>
+          </>
+        )
+
+      case 'occasions':
+        return (
+          <>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="occasionType">
+                  Occasion Type
+                </label>
+                <select
+                  id="occasionType"
+                  className="form-input form-select"
+                  value={formData.interest}
+                  onChange={(event) => updateField('interest', event.target.value)}
+                >
+                  <option value="" disabled>
+                    Select occasion
+                  </option>
+                  {occasionOptions.map((option) => (
+                    <option value={option} key={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="occasionDate">
+                  Preferred Event Date
+                </label>
+                <input
+                  id="occasionDate"
+                  type="date"
+                  className="form-input"
+                  value={formData.eventDate}
+                  onChange={(event) => updateField('eventDate', event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="occasionGuests">
+                Approximate Guests
+              </label>
+              <select
+                id="occasionGuests"
+                className="form-input form-select"
+                value={formData.guestCount}
+                onChange={(event) => updateField('guestCount', event.target.value)}
+              >
+                <option value="" disabled>
+                  Select range
+                </option>
+                {guestRanges.map((option) => (
+                  <option value={option} key={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )
+
+      case 'amenities':
+        return (
+          <>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="amenityInterest">
+                  Amenity of Interest
+                </label>
+                <select
+                  id="amenityInterest"
+                  className="form-input form-select"
+                  value={formData.interest}
+                  onChange={(event) => updateField('interest', event.target.value)}
+                >
+                  <option value="" disabled>
+                    Select amenity
+                  </option>
+                  {amenityOptions.map((option) => (
+                    <option value={option} key={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="amenityDate">
+                  Visit Date
+                </label>
+                <input
+                  id="amenityDate"
+                  type="date"
+                  className="form-input"
+                  value={formData.eventDate}
+                  onChange={(event) => updateField('eventDate', event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="amenityGuests">
+                Number of Guests
+              </label>
+              <select
+                id="amenityGuests"
+                className="form-input form-select"
+                value={formData.guestCount}
+                onChange={(event) => updateField('guestCount', event.target.value)}
+              >
+                <option value="" disabled>
+                  Select range
+                </option>
+                {guestRanges.map((option) => (
+                  <option value={option} key={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )
+
+      case 'general':
+      default:
+        return null
     }
   }
 
+  /* ── Shared contact fields (slimmer for general) ── */
+  const renderContactFields = () => {
+    if (activeCategory === 'general') {
+      return (
+        <>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="generalName">
+                Full Name
+              </label>
+              <input
+                id="generalName"
+                type="text"
+                className="form-input"
+                placeholder="Juan Dela Cruz"
+                value={formData.name}
+                onChange={(event) => updateField('name', event.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="generalEmail">
+                Email Address
+              </label>
+              <input
+                id="generalEmail"
+                type="email"
+                className="form-input"
+                placeholder="juan@email.com"
+                value={formData.email}
+                onChange={(event) => updateField('email', event.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="generalMessage">
+              Message
+            </label>
+            <textarea
+              id="generalMessage"
+              rows={5}
+              className="form-input form-textarea"
+              placeholder="How can we help?"
+              value={formData.notes}
+              onChange={(event) => updateField('notes', event.target.value)}
+              required
+            />
+          </div>
+        </>
+      )
+    }
+
+    return (
+      <>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label" htmlFor="inquiryName">
+              Full Name
+            </label>
+            <input
+              id="inquiryName"
+              type="text"
+              className="form-input"
+              placeholder="Juan Dela Cruz"
+              value={formData.name}
+              onChange={(event) => updateField('name', event.target.value)}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="inquiryPhone">
+              Phone Number
+            </label>
+            <input
+              id="inquiryPhone"
+              type="tel"
+              className="form-input"
+              placeholder="+63 912 345 6789"
+              value={formData.phone}
+              onChange={(event) => updateField('phone', event.target.value)}
+              required
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label" htmlFor="inquiryEmail">
+            Email Address
+          </label>
+          <input
+            id="inquiryEmail"
+            type="email"
+            className="form-input"
+            placeholder="juan@email.com"
+            value={formData.email}
+            onChange={(event) => updateField('email', event.target.value)}
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label" htmlFor="inquiryNotes">
+            Anything We Should Know?
+          </label>
+          <textarea
+            id="inquiryNotes"
+            rows={4}
+            className="form-input form-textarea"
+            placeholder="Preferred setup, food needs, program flow, or early questions..."
+            value={formData.notes}
+            onChange={(event) => updateField('notes', event.target.value)}
+          />
+        </div>
+      </>
+    )
+  }
+
+  /* ── Review summary rows ── */
+  const buildReviewRows = (): [string, string][] => {
+    const rows: [string, string][] = []
+    if (activeCategory !== 'general' && formData.interest) {
+      rows.push([INTEREST_LABELS[activeCategory as Exclude<InquiryCategory, 'general'>], formData.interest])
+    }
+    if (formData.eventType) rows.push(['Event type', formData.eventType])
+    if (formData.guestCount) rows.push(['Guests', formData.guestCount])
+    if (formData.eventDate) rows.push(['Preferred date', formatDisplayDate(formData.eventDate)])
+    if (formData.budget) rows.push(['Budget', formData.budget])
+    rows.push(['Name', formData.name])
+    if (formData.phone) rows.push(['Phone', formData.phone])
+    rows.push(['Email', formData.email])
+    return rows
+  }
+
+  const activeCategoryConfig = CATEGORIES.find((c) => c.id === activeCategory)!
+
   return (
-    <section id="contact" className="contact-section" aria-label="Package inquiry">
+    <section id="contact" className="contact-section" aria-label="Inquiry">
       <div className="contact-container contact-container--split">
         <div className="section-header reveal">
           <span className="section-tag" data-sanity="contactSection.eyebrow">{content.eyebrow}</span>
@@ -248,7 +778,7 @@ export default function ContactSection({
         </div>
 
         <div className="split-layout">
-          {/* Left Panel - Contact Details */}
+          {/* ── Left Panel — Contact Details ── */}
           <div className="contact-left-column">
             <div className="contact-info-panel reveal">
               <div className="contact-info-header">
@@ -334,243 +864,65 @@ export default function ContactSection({
                 </p>
               </div>
             </div>
-
-            {/* Inquiry Card (General Questions) */}
-            <div className="contact-inquiry-card reveal">
-              <div className="contact-inquiry-header">
-                <h3 className="contact-inquiry-title">Got questions? reach us through here</h3>
-                <p className="contact-inquiry-desc">Send a quick message and we’ll get back to you.</p>
-              </div>
-
-              <form className="contact-inquiry-form" onSubmit={sendGeneralInquiry}>
-                <div className="contact-inquiry-field">
-                  <label className="form-label" htmlFor="inquiryEmail">
-                    Email
-                  </label>
-                  <input
-                    id="inquiryEmail"
-                    type="email"
-                    className="form-input"
-                    value={generalInquiry.email}
-                    onChange={(event) => setGeneralInquiry((cur) => ({ ...cur, email: event.target.value }))}
-                    required
-                    placeholder="you@email.com"
-                  />
-                </div>
-
-                <div className="contact-inquiry-field">
-                  <label className="form-label" htmlFor="inquiryMessage">
-                    Message
-                  </label>
-                  <textarea
-                    id="inquiryMessage"
-                    className="form-input form-textarea"
-                    value={generalInquiry.message}
-                    onChange={(event) => setGeneralInquiry((cur) => ({ ...cur, message: event.target.value }))}
-                    required
-                    rows={4}
-                    placeholder="Your questions..."
-                  />
-                </div>
-
-                <button type="submit" className="submit-button contact-inquiry-submit" disabled={generalSending}>
-                  <span>{generalSending ? 'Sending...' : 'Send Message'}</span>
-                </button>
-
-                {generalMessage && <p className="contact-inquiry-message">{generalMessage}</p>}
-              </form>
-            </div>
           </div>
 
-          {/* Right Panel - Form */}
-          <form className="contact-form package-inquiry-form reveal" onSubmit={handleReview}>
-            <div className="form-intro package-form-intro">
+          {/* ── Right Panel — Tabbed Inquiry Form ── */}
+          <div className="inquiry-card reveal">
+            <div className="form-intro inquiry-intro">
               <div>
-                <span className="form-intro-step">Event details</span>
+                <span className="form-intro-step">How can we help?</span>
                 <p data-sanity="contactSection.formIntro">{content.formIntro}</p>
               </div>
               <div className="package-form-pill">No commitment yet</div>
             </div>
 
-            <div className="package-form-band">
-              <div className="form-row package-top-row">
-                <div className="form-group">
-                  <label className="form-label" htmlFor="packageName">
-                    Package of Interest
-                  </label>
-                  <select
-                    id="packageName"
-                    name="Package of Interest"
-                    className="form-input form-select"
-                    value={formData.packageName}
-                    onChange={(event) => updateField('packageName', event.target.value)}
-                    required
-                    data-sanity="packageItem.title"
-                  >
-                    <option value="" disabled>
-                      Select package
-                    </option>
-                    {packageOptions.map((option) => (
-                      <option value={option} key={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            {/* Category tabs */}
+            <div className="inquiry-tabs" role="tablist" aria-label="Inquiry category">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  role="tab"
+                  aria-selected={activeCategory === cat.id}
+                  type="button"
+                  className={`inquiry-tab ${activeCategory === cat.id ? 'inquiry-tab--active' : ''}`}
+                  onClick={() => switchCategory(cat.id)}
+                >
+                  {cat.icon}
+                  {cat.label}
+                </button>
+              ))}
+            </div>
 
-                <div className="form-group">
-                  <label className="form-label" htmlFor="eventDate">
-                    Preferred Event Date
-                  </label>
-                  <div className="package-date-shell">
-                    <input
-                      ref={dateInputRef}
-                      id="eventDate"
-                      type="date"
-                      name="Preferred Event Date"
-                      className="form-input package-date-input"
-                      value={formData.eventDate}
-                      onChange={(event) => updateField('eventDate', event.target.value)}
-                    />
-                    <button
-                      type="button"
-                      className="package-date-button"
-                      onClick={openDatePicker}
-                      aria-label="Open event date picker"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.7" />
-                        <path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label" htmlFor="eventType">
-                    Event Type
-                  </label>
-                  <input
-                    id="eventType"
-                    type="text"
-                    name="Event Type"
-                    required
-                    placeholder="Birthday, reunion, christening..."
-                    className="form-input"
-                    value={formData.eventType}
-                    onChange={(event) => updateField('eventType', event.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label" htmlFor="guestCount">
-                    Approximate Guests
-                  </label>
-                  <select
-                    id="guestCount"
-                    name="Approximate Guests"
-                    className="form-input form-select"
-                    value={formData.guestCount}
-                    onChange={(event) => updateField('guestCount', event.target.value)}
-                    required
-                  >
-                    <option value="" disabled>
-                      Select range
-                    </option>
-                    <option value="10-20 people">10-20 people</option>
-                    <option value="20-30 people">20-30 people</option>
-                    <option value="30-50 people">30-50 people</option>
-                    <option value="50-100 people">50-100 people</option>
-                    <option value="100+ people">100+ people</option>
-                  </select>
-                </div>
+            {/* Category blurb */}
+            <div className="inquiry-category-bar">
+              <div className="inquiry-category-icon">{activeCategoryConfig.icon}</div>
+              <div>
+                <strong>{activeCategoryConfig.label}</strong>
+                <span>{activeCategoryConfig.blurb}</span>
               </div>
             </div>
 
-            <div className="package-form-band package-form-band--quiet">
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label" htmlFor="name">
-                    Full Name
-                  </label>
-                  <input
-                    id="name"
-                    type="text"
-                    name="Full Name"
-                    required
-                    placeholder="Juan Dela Cruz"
-                    className="form-input"
-                    value={formData.name}
-                    onChange={(event) => updateField('name', event.target.value)}
-                  />
-                </div>
+            <form className="inquiry-form" onSubmit={handleReview}>
+              {renderCategoryFields()}
+              {renderContactFields()}
 
-                <div className="form-group">
-                  <label className="form-label" htmlFor="phone">
-                    Phone Number
-                  </label>
-                  <input
-                    id="phone"
-                    type="tel"
-                    name="Phone"
-                    required
-                    placeholder="+63 912 345 6789"
-                    className="form-input"
-                    value={formData.phone}
-                    onChange={(event) => updateField('phone', event.target.value)}
-                  />
-                </div>
+              {formMessage && <p className="inquiry-message">{formMessage}</p>}
+
+              <div className="form-footer inquiry-footer">
+                <p className="form-note">You will review these details before anything is sent.</p>
               </div>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="email">
-                  Email Address
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  name="Email"
-                  required
-                  placeholder="juan@email.com"
-                  className="form-input"
-                  value={formData.email}
-                  onChange={(event) => updateField('email', event.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" htmlFor="message">
-                  Anything We Should Know?
-                </label>
-                <textarea
-                  id="message"
-                  name="Event Notes"
-                  rows={4}
-                  placeholder="Preferred setup, food needs, program flow, or early questions..."
-                  className="form-input form-textarea"
-                  value={formData.notes}
-                  onChange={(event) => updateField('notes', event.target.value)}
-                />
-              </div>
-            </div>
-
-            {formMessage && <p className="package-form-message">{formMessage}</p>}
-
-            <div className="form-footer package-form-footer">
-              <p className="form-note">You will review these details before anything is sent.</p>
-            </div>
-
-            <button type="submit" className="submit-button">
-              <span>Review Package Inquiry</span>
-              <svg className="button-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </form>
+              <button type="submit" className="submit-button">
+                <span>Review {activeCategoryConfig.label} Inquiry</span>
+                <svg className="button-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </form>
+          </div>
         </div>
 
+        {/* ── Review Modal ── */}
         {reviewOpen && (
           <div className="package-review-shell" onClick={closeReview}>
             <div className="package-review-modal" onClick={(event) => event.stopPropagation()}>
@@ -578,30 +930,25 @@ export default function ContactSection({
                 type="button"
                 className="package-review-close"
                 onClick={closeReview}
-                aria-label="Close package inquiry review"
+                aria-label="Close inquiry review"
               >
                 x
               </button>
 
               <span className="form-intro-step">Review details</span>
-              <h3>Package Inquiry Preview</h3>
-              <p className="package-review-copy">Confirm the event basics below before we send them to Villa Susane.</p>
+              <h3>{activeCategoryConfig.label} Inquiry Preview</h3>
+              <p className="package-review-copy">Confirm the details below before we send them to Villa Susane.</p>
 
               <div className="package-review-highlight">
-                <span>Selected package</span>
-                <strong>{formData.packageName}</strong>
+                <span>Inquiry type</span>
+                <strong>{activeCategoryConfig.label}</strong>
                 <small>
-                  {formData.eventType} · {formData.guestCount}
+                  {formData.interest || formData.eventType || (formData.guestCount ? `For ${formData.guestCount.toLowerCase()}` : 'Tell us what you need')}
                 </small>
               </div>
 
               <div className="package-review-grid">
-                {[
-                  ['Event date', formatDisplayDate(formData.eventDate)],
-                  ['Guest name', formData.name],
-                  ['Phone', formData.phone],
-                  ['Email', formData.email],
-                ].map(([label, value]) => (
+                {buildReviewRows().map(([label, value]) => (
                   <div className="package-review-item" key={label}>
                     <span>{label}</span>
                     <strong>{value}</strong>
@@ -609,14 +956,14 @@ export default function ContactSection({
                 ))}
               </div>
 
-              {formData.notes && (
+              {formData.notes && activeCategory !== 'general' && (
                 <div className="package-review-note">
                   <span>Notes</span>
                   <p>{formData.notes}</p>
                 </div>
               )}
 
-              {formMessage && <p className="package-form-message">{formMessage}</p>}
+              {formMessage && <p className="inquiry-message">{formMessage}</p>}
 
               <div className="package-review-actions">
                 <button
@@ -648,3 +995,4 @@ export default function ContactSection({
     </section>
   )
 }
+

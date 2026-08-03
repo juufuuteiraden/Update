@@ -84,5 +84,6 @@ export type ShowcaseItem = {
   price: string
   image_url: string
   category: string
+  badge?: string
   order: number
 }

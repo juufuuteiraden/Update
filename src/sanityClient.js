@@ -13,7 +13,7 @@ const studioUrl =
 export const client = createClient({
   projectId: 'rghbiwhc',
   dataset: 'production',
-  apiVersion: '2026-05-24',
+  apiVersion: '2024-01-01',
   useCdn: true,
   stega: {
     enabled: import.meta.env.DEV || isVisualEditing,

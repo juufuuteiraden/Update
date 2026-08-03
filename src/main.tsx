@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { ToastProvider } from './components/admin/Toast'
 import { enableVisualEditing } from '@sanity/visual-editing'
 
 // Disable Sanity "Open in studio" highlighters on the public site.
@@ -16,5 +17,7 @@ try {
 
 
 createRoot(document.getElementById('root')!).render(
-  <App />
+  <ToastProvider>
+    <App />
+  </ToastProvider>
 )

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import './AdminPanel.css'
 import { supabase } from '../supabaseClient'
 import type { GalleryItem, PackageItem, ReviewItem, RoomItem, ShowcaseItem, WalkInRateRow, AmenityRow } from '../supabaseTypes'
+import ConfirmDialog from '../components/admin/ConfirmDialog'
+import { useToast } from '../components/admin/Toast'
 
 const ADMIN_EMAIL = 'admin@villasusane.website'
 const ADMIN_PASSWORD = 'SusaneVilla2024!'
@@ -32,12 +34,38 @@ function fileName(file: File) {
 }
 
 export default function AdminPanel() {
+  const { showToast } = useToast()
   const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem(SESSION_KEY) === 'true')
   const [login, setLogin] = useState({ email: '', password: '', showPassword: false })
   const [loginError, setLoginError] = useState('')
   const [active, setActive] = useState<Section>('Gallery')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  // ── Confirm Dialog state ──
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean
+    title: string
+    message: string
+    variant?: 'danger' | 'default'
+    confirmLabel?: string
+    onConfirm: () => void
+  }>({ open: false, title: '', message: '', onConfirm: () => {} })
+
+  const openConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    options?: { variant?: 'danger' | 'default'; confirmLabel?: string },
+  ) => {
+    setConfirmDialog({
+      open: true,
+      title,
+      message,
+      variant: options?.variant ?? 'danger',
+      confirmLabel: options?.confirmLabel,
+      onConfirm,
+    })
+  }
 
   const [gallery, setGallery] = useState<GalleryItem[]>([])
   const [reviews, setReviews] = useState<ReviewItem[]>([])
@@ -144,17 +172,17 @@ export default function AdminPanel() {
     return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
   }
 
-  const addGalleryImage = async (file: File | null) => {
+const addGalleryImage = async (file: File | null) => {
     if (!file) return
     setLoading(true)
     try {
       const imageUrl = await uploadImage(file)
       const { error } = await supabase.from('gallery').insert({ image_url: imageUrl, order: galleryOrder })
       if (error) throw error
-      showMessage('Success! Gallery image upload completed.')
+      showToast('Success! Gallery image upload completed.')
       await loadAll()
     } catch (error) {
-      showMessage(error instanceof Error ? error.message : 'Unable to add image.')
+      showToast(error instanceof Error ? error.message : 'Unable to add image.', 'error')
     } finally {
       setLoading(false)
     }
@@ -164,9 +192,18 @@ export default function AdminPanel() {
     setLoading(true)
     const { error } = await supabase.from(table as any).delete().eq('id', id)
     setLoading(false)
-    if (error) { showMessage(error.message); return }
-    showMessage('Deleted.')
+    if (error) { showToast(error.message, 'error'); return }
+    showToast('Deleted.')
     await loadAll()
+  }
+
+  const confirmDeleteRow = (table: string, id: string) => {
+    openConfirm(
+      'Delete this item?',
+      'This will permanently remove the item from the website. This action cannot be undone.',
+      () => deleteRow(table, id),
+      { variant: 'danger', confirmLabel: 'Delete' },
+    )
   }
 
   const saveReview = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -177,10 +214,10 @@ export default function AdminPanel() {
       ? await supabase.from('reviews').update(payload).eq('id', reviewId)
       : await supabase.from('reviews').insert(payload)
     setLoading(false)
-    if (error) return showMessage(error.message)
+    if (error) return showToast(error.message, 'error')
     setReviewForm(emptyReview)
     setReviewId(null)
-    showMessage('Review saved.')
+    showToast('Review saved.')
     await loadAll()
   }
 
@@ -206,10 +243,10 @@ export default function AdminPanel() {
       setRoomForm(emptyRoom)
       setRoomId(null)
       setRoomImage(null)
-      showMessage('Room saved.')
+      showToast('Room saved.')
       await loadAll()
     } catch (error) {
-      showMessage(error instanceof Error ? error.message : 'Unable to save room.')
+      showToast(error instanceof Error ? error.message : 'Unable to save room.', 'error')
     } finally {
       setLoading(false)
     }
@@ -228,10 +265,10 @@ export default function AdminPanel() {
       ? await supabase.from('packages').update(payload).eq('id', packageId)
       : await supabase.from('packages').insert(payload)
     setLoading(false)
-    if (error) return showMessage(error.message)
+    if (error) return showToast(error.message, 'error')
     setPackageForm(emptyPackage)
     setPackageId(null)
-    showMessage('Package saved.')
+    showToast('Package saved.')
     await loadAll()
   }
 
@@ -258,10 +295,10 @@ export default function AdminPanel() {
       setShowcaseForm(emptyShowcase)
       setShowcaseId(null)
       setShowcaseImage(null)
-      showMessage('Showcase item saved.')
+      showToast('Showcase item saved.')
       await loadAll()
     } catch (error) {
-      showMessage(error instanceof Error ? error.message : 'Unable to save showcase item.')
+      showToast(error instanceof Error ? error.message : 'Unable to save showcase item.', 'error')
     } finally {
       setLoading(false)
     }
@@ -333,7 +370,21 @@ export default function AdminPanel() {
         {active === 'Rooms' && renderRooms()}
         {active === 'Packages' && renderPackages()}
         {active === 'Event Showcase' && renderEventShowcase()}
-      </section>
+</section>
+
+        {/* ── Confirm Dialog ── */}
+<ConfirmDialog
+          open={confirmDialog.open}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          variant={confirmDialog.variant}
+          confirmLabel={confirmDialog.confirmLabel}
+          onConfirm={async () => {
+            await confirmDialog.onConfirm()
+            setConfirmDialog(prev => ({ ...prev, open: false }))
+          }}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        />
     </main>
   )
 
@@ -383,7 +434,7 @@ export default function AdminPanel() {
                     >
                       Edit
                     </button>
-                    <button onClick={() => deleteRow('gallery', item.id)}>Delete</button>
+                    <button onClick={() => confirmDeleteRow('gallery', item.id)}>Delete</button>
                   </div>
 
                   {item.id === galleryEditId && (
@@ -525,7 +576,7 @@ export default function AdminPanel() {
                   setReviewId(review.id)
                   setReviewForm({ guest_name: review.guest_name, event_type: review.event_type, rating: review.rating, quote: review.quote })
                 }}>Edit</button>
-                <button onClick={() => deleteRow('reviews', review.id)}>Delete</button>
+                <button onClick={() => confirmDeleteRow('reviews', review.id)}>Delete</button>
               </div>
             </article>
           ))}
@@ -589,7 +640,7 @@ export default function AdminPanel() {
                   setRoomForm({ name: room.name, description: room.description, price: String(room.price || ''), guests: String(room.guests || ''), features: listToText(room.features) })
                   setRoomImage(null)
                 }}>Edit</button>
-                <button onClick={() => deleteRow('rooms', room.id)}>Delete</button>
+                <button onClick={() => confirmDeleteRow('rooms', room.id)}>Delete</button>
               </div>
             </article>
           ))}
@@ -645,7 +696,7 @@ export default function AdminPanel() {
                   setPackageId(pkg.id)
                   setPackageForm({ name: pkg.name, price: pkg.price, inclusions: listToText(pkg.inclusions), highlighted: pkg.highlighted })
                 }}>Edit</button>
-                <button onClick={() => deleteRow('packages', pkg.id)}>Delete</button>
+                <button onClick={() => confirmDeleteRow('packages', pkg.id)}>Delete</button>
               </div>
             </article>
           ))}
@@ -715,7 +766,7 @@ export default function AdminPanel() {
                   })
                   setShowcaseImage(null)
                 }}>Edit</button>
-                <button onClick={() => deleteRow('event_showcase', item.id)}>Delete</button>
+                <button onClick={() => confirmDeleteRow('event_showcase', item.id)}>Delete</button>
               </div>
             </article>
           ))}

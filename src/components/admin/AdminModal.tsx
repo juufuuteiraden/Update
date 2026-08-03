@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { lockScroll, stableUnlockScroll } from '../../utils/scrollLock'
 import './adminMode.css'
 
 export default function AdminModal({
@@ -16,20 +17,29 @@ export default function AdminModal({
   children: ReactNode
   footer?: ReactNode
 }) {
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  // Stable lock token that survives remounts/re-renders; using a ref (instead
+  // of useId()) guarantees the cleanup always unlocks the same token it locked.
+  const lockIdRef = useRef<string | null>(null)
+  if (lockIdRef.current === null) {
+    lockIdRef.current = `admin-modal-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  }
+  const lockId = lockIdRef.current
+
   useEffect(() => {
     if (!open) return
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    lockScroll(lockId)
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => {
-      document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
+      stableUnlockScroll(lockId)
     }
-  }, [open, onClose])
+  }, [open, lockId])
 
   if (!open) return null
 

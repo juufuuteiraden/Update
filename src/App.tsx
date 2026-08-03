@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 
 import './App.css'
+import { useToast } from './components/admin/Toast'
 import HeroSection from './pages/HeroSection'
 import Amenities from './pages/Amenities'
 import Rates from './pages/Rates'
@@ -10,8 +11,8 @@ import FindUs from './pages/FindUs'
 import PostsSection from './pages/PostsSection'
 import ReviewsSection from './pages/ReviewsSection'
 import AdminModeToolbar from './components/admin/AdminModeToolbar'
-import { isAdminModeEnabled } from './utils/adminMode'
 import { supabase } from './supabaseClient'
+import { unlockAllScroll } from './utils/scrollLock'
 import './components/admin/adminModeLogin.css'
 /* ----------------------------------------------------------
    Types
@@ -141,39 +142,7 @@ function useScrollReveal() {
   }, [])
 }
 
-/* ----------------------------------------------------------
-   Alert Component
-   ---------------------------------------------------------- */
-function Alert({ message, color, onClose }: { message: string; color: string; onClose: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 4000)
-    return () => clearTimeout(timer)
-  }, [onClose])
 
-  return (
-    <div
-      className="alert-slide"
-      style={{
-        position: 'fixed',
-        top: '24px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 200,
-        background: color,
-        color: '#FFFDF7',
-        padding: '1rem 2rem',
-        borderRadius: '12px',
-        fontFamily: 'Inter, sans-serif',
-        fontWeight: 500,
-        fontSize: '0.95rem',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {message}
-    </div>
-  )
-}
 
 function formatReservationDate(value: string) {
   if (!value) return ''
@@ -558,16 +527,17 @@ function BookingModal({
    Main App Component
    ---------------------------------------------------------- */
 export default function App() {
+  const { showToast } = useToast()
   const [headerScrolled, setHeaderScrolled] = useState(false)
-  const [adminMode, setAdminMode] = useState(() => isAdminModeEnabled())
+  const [adminMode, setAdminMode] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState<RoomData | null>(null)
-  const [alert, setAlert] = useState<{ message: string; color: string } | null>(null)
   const siteSettings = fallbackSiteSettings
 
   // Admin login state — only used on /admin-vs-2024
-  const [adminAuth, setAdminAuth] = useState(() => isAdminModeEnabled())
+  // Starts logged out; the real Supabase session (restored below) decides access.
+  const [adminAuth, setAdminAuth] = useState(false)
   const [adminLogin, setAdminLogin] = useState({ user: '', password: '', showPassword: false })
   const [adminLoginError, setAdminLoginError] = useState('')
 
@@ -599,6 +569,7 @@ export default function App() {
       if (e.key === 'Escape') {
         setModalOpen(false)
         setMobileMenuOpen(false)
+        unlockAllScroll()
       }
     }
     window.addEventListener('keydown', handleKey)
@@ -612,6 +583,12 @@ export default function App() {
         try { localStorage.setItem(SESSION_KEY, 'true') } catch { /* ignore */ }
         setAdminAuth(true)
         setAdminMode(true)
+      } else {
+        // No real Supabase session — clear any stale local flag so admin mode
+        // cannot be entered (or bypass the login screen) without a valid login.
+        try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+        setAdminAuth(false)
+        setAdminMode(false)
       }
     })
 
@@ -655,8 +632,8 @@ export default function App() {
         const parsed = raw ? (JSON.parse(raw) as unknown[]) : []
         const list = Array.isArray(parsed) ? parsed : []
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify([...list, newReservation]))
-      } catch { /* storage unavailable */ }
-      setAlert({ message: `Booking request received for ${roomName}! We will contact you shortly.`, color: '#2A9D8F' })
+} catch { /* storage unavailable */ }
+      showToast(`Booking request received for ${roomName}! We will contact you shortly.`, 'success')
     },
     []
   )
@@ -820,6 +797,7 @@ export default function App() {
           onLogout={async () => {
             await supabase.auth.signOut()
             try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+            unlockAllScroll()
             setAdminAuth(false)
             setAdminMode(false)
           }}
@@ -869,16 +847,14 @@ export default function App() {
         <AdminModeToolbar
           onLogout={() => {
             try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+            unlockAllScroll()
             setAdminMode(false)
           }}
         />
       )}
 
-      {/* Grain texture overlay */}
+{/* Grain texture overlay */}
       <div className="grain-overlay" />
-
-      {/* Alert */}
-      {alert && <Alert message={alert.message} color={alert.color} onClose={() => setAlert(null)} />}
 
       {/* Booking Modal */}
       <BookingModal room={selectedRoom} isOpen={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleBookingSubmit} />

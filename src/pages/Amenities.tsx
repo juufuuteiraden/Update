@@ -4,6 +4,8 @@ import './Amenities.css'
 import { supabase } from '../supabaseClient'
 import type { AmenityRow } from '../supabaseTypes'
 import AdminModal from '../components/admin/AdminModal'
+import ConfirmDialog from '../components/admin/ConfirmDialog'
+import { useToast } from '../components/admin/Toast'
 import { isAdminModeEnabled } from '../utils/adminMode'
 import { Plus, Edit, Trash2, Upload, Save } from 'lucide-react'
 
@@ -110,8 +112,22 @@ const uploadImage = async (file: File) => {
 
 export default function Amenities() {
   const showAdmin = isAdminModeEnabled() && window.location.pathname === '/admin-vs-2024'
+  const { showToast } = useToast()
   const [content, setContent] = useState<AmenitiesContent>(fallbackAmenitiesContent)
   const [amenities, setAmenities] = useState<AmenityData[]>(fallbackAmenities)
+
+  // ── Confirm Dialog state ──
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    message: string
+    variant?: 'danger' | 'default'
+    confirmLabel?: string
+    onConfirm: () => void
+  } | null>(null)
+
+  const openConfirm = (title: string, message: string, onConfirm: () => void, variant?: 'danger' | 'default') => {
+    setConfirmDialog({ title, message, onConfirm, variant })
+  }
 
   // Amenity management state
   const [amenityModalOpen, setAmenityModalOpen] = useState(false)
@@ -141,11 +157,17 @@ export default function Amenities() {
     })
   }
 
-  const deleteFallbackAmenity = (index: number) => {
+const deleteFallbackAmenity = (index: number) => {
     const name = fallbackAmenities[index]?.name || 'this amenity'
-    if (!window.confirm(`Remove "${name}" from display? You can save it to the database first.`)) return
-    setDeletedFallbackIndices(prev => new Set([...prev, index]))
-    showUndoAmenity(index, { edits: fallbackEdits[index], name })
+    openConfirm(
+      'Remove amenity from display?',
+      `Remove "${name}" from display? You can save it to the database first.`,
+      () => {
+        setDeletedFallbackIndices(prev => new Set([...prev, index]))
+        showUndoAmenity(index, { edits: fallbackEdits[index], name })
+        showToast(`Removed "${name}" from display.`)
+      },
+    )
   }
 
   const saveFallbackToDB = async (index: number) => {
@@ -164,8 +186,8 @@ export default function Amenities() {
         delete n[index]
         return n
       })
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save amenity')
+} catch (err) {
+      showToast(err instanceof Error ? err.message : 'Unable to save amenity', 'error')
     } finally {
       setSavingFallbackToDB(false)
     }
@@ -190,8 +212,8 @@ export default function Amenities() {
 
   const saveAmenity = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!editingAmenityId && !amenityDraftFile) {
-      alert('Please select an image.')
+if (!editingAmenityId && !amenityDraftFile) {
+      showToast('Please select an image.', 'error')
       return
     }
     setSavingAmenity(true)
@@ -217,17 +239,22 @@ export default function Amenities() {
       if (error) throw error
       resetAmenityDraft()
       setAmenityModalOpen(false)
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save amenity')
+} catch (err) {
+      showToast(err instanceof Error ? err.message : 'Unable to save amenity', 'error')
     } finally {
       setSavingAmenity(false)
     }
   }
 
   const deleteAmenity = async (id: string) => {
-    if (!window.confirm('Delete this amenity?')) return
-    const { error } = await supabase.from('amenities').delete().eq('id', id)
-    if (error) alert(error.message)
+    openConfirm('Delete this amenity?', 'Are you sure you want to delete this amenity? This action cannot be undone.', async () => {
+      const { error } = await supabase.from('amenities').delete().eq('id', id)
+      if (error) {
+        showToast(error.message, 'error')
+      } else {
+        showToast('Amenity deleted successfully.')
+      }
+    }, 'danger')
   }
 
   const openEditAmenity = (amenity: AmenityData) => {
@@ -300,8 +327,9 @@ export default function Amenities() {
       })
       .catch(() => {
         if (!isMounted) return
+        // Only reset the section headings. Do NOT reset `amenities` here —
+        // Supabase is the source of truth and must survive a Sanity failure.
         setContent(fallbackAmenitiesContent)
-        setAmenities(fallbackAmenities)
       })
 
     return () => {
@@ -551,8 +579,8 @@ export default function Amenities() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {amenities.filter(a => a.dbId).map((amenity) => (
                   <div key={amenity.dbId} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', background: 'var(--section-white)', border: '1px solid rgba(0,109,119,0.12)', borderRadius: '10px' }}>
-                    {amenity.image && (
-                      <img src={amenity.image} alt="" style={{ width: '48px', height: '48px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
+{amenity.image && (
+                      <img src={amenity.image} alt="" style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong style={{ fontSize: '0.9rem', color: '#1A2B2C' }}>{amenity.name}</strong>
@@ -582,7 +610,21 @@ export default function Amenities() {
             </div>
           )}
         </div>
-      </AdminModal>
+</AdminModal>
+
+{/* ── Confirm Dialog ── */}
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        variant={confirmDialog?.variant}
+        confirmLabel={confirmDialog?.confirmLabel}
+        onConfirm={async () => {
+          await confirmDialog?.onConfirm()
+          setConfirmDialog(null)
+        }}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </>
   )
 }

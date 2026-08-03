@@ -5,6 +5,8 @@ import { supabase } from '../supabaseClient'
 import type { GalleryItem } from '../supabaseTypes'
 import { isAdminModeEnabled } from '../utils/adminMode'
 import AdminModal from '../components/admin/AdminModal'
+import ConfirmDialog from '../components/admin/ConfirmDialog'
+import { useToast } from '../components/admin/Toast'
 import { ImagePlus, Save, Trash2, Upload, X, Plus, Edit } from 'lucide-react'
 
 /* ── Types ── */
@@ -16,6 +18,7 @@ type Post = {
   title: string
   subtitle: string
   image: string
+  badge?: string
 }
 
 type GalleryEdit = {
@@ -30,6 +33,7 @@ type ShowcaseDraft = {
   subtitle: string
   category: string
   image: string
+  badge?: string
 }
 
 /* ── Data ── */
@@ -160,6 +164,31 @@ export default function PostsSection() {
   const [savingGallery, setSavingGallery] = useState(false)
   const autoplayRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // ── Toast + Confirm dialog ──
+  const { showToast } = useToast()
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    message: string
+    variant?: 'danger' | 'default'
+    confirmLabel?: string
+    onConfirm: () => void
+  } | null>(null)
+
+  const openConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    options?: { variant?: 'danger' | 'default'; confirmLabel?: string },
+  ) => {
+    setConfirmDialog({
+      title,
+      message,
+      variant: options?.variant ?? 'danger',
+      confirmLabel: options?.confirmLabel,
+      onConfirm,
+    })
+  }
+
   // ── Undo stack for default post deletions ──
   const [undoDefaultPost, setUndoDefaultPost] = useState<{ id: string; data: any; timer: number } | null>(null)
 
@@ -169,22 +198,42 @@ export default function PostsSection() {
     setUndoDefaultPost({ id, data, timer })
   }
 
-  // ── Default post inline management ──
-  const [defaultPostEdits, setDefaultPostEdits] = useState<Record<string, { title: string; subtitle: string; category: string }>>({})
+// ── Default post inline management ──
+  const [defaultPostEdits, setDefaultPostEdits] = useState<Record<string, { title: string; subtitle: string; category: string; image: string; imageFile: File | null }>>({})
 const [deletedDefaultIds, setDeletedDefaultIds] = useState<Set<string>>(new Set())
 
-  const updateDefaultPostEdit = (id: string, patch: { title?: string; subtitle?: string; category?: string }) => {
+  const updateDefaultPostEdit = (id: string, patch: { title?: string; subtitle?: string; category?: string; image?: string; imageFile?: File | null }) => {
     setDefaultPostEdits(prev => {
-      const current = prev[id] || { title: defaultPosts.find(p => p.id === id)?.title || '', subtitle: defaultPosts.find(p => p.id === id)?.subtitle || '', category: defaultPosts.find(p => p.id === id)?.category || '' }
+      const base = {
+        title: defaultPosts.find(p => p.id === id)?.title || '',
+        subtitle: defaultPosts.find(p => p.id === id)?.subtitle || '',
+        category: defaultPosts.find(p => p.id === id)?.category || '',
+        image: defaultPosts.find(p => p.id === id)?.image || '',
+        imageFile: null as File | null,
+      }
+      const current = prev[id] || base
       return { ...prev, [id]: { ...current, ...patch } }
     })
   }
 
+  const handleDefaultImageChange = (id: string, file: File | null) => {
+    if (!file) return
+    const preview = URL.createObjectURL(file)
+    updateDefaultPostEdit(id, { image: preview, imageFile: file })
+  }
+
   const deleteDefaultPost = (id: string) => {
-    if (!window.confirm(`Remove "${defaultPosts.find(p => p.id === id)?.title || id}" from display? You can also save it to showcase first.`)) return
-    setDeletedDefaultIds(prev => new Set([...prev, id]))
     const post = defaultPosts.find(p => p.id === id)
-    showUndoDefaultPost(id, { edits: defaultPostEdits[id], name: post?.title || id })
+    const name = post?.title || id
+    openConfirm(
+      'Remove post from display?',
+      `Remove "${name}" from display? You can also save it to showcase first.`,
+      () => {
+        setDeletedDefaultIds(prev => new Set([...prev, id]))
+        showUndoDefaultPost(id, { edits: defaultPostEdits[id], name })
+        showToast(`Removed "${name}" from display.`)
+      },
+    )
   }
 
   const saveDefaultPostToDB = async (id: string) => {
@@ -195,6 +244,12 @@ const [deletedDefaultIds, setDeletedDefaultIds] = useState<Set<string>>(new Set(
     setSavingShowcase(true)
     try {
       let imageUrl = post.image
+      if (edit?.imageFile) {
+        const path = fileName(edit.imageFile)
+        const { error: uploadError } = await supabase.storage.from('villa-images').upload(path, edit.imageFile)
+        if (uploadError) throw uploadError
+        imageUrl = supabase.storage.from('villa-images').getPublicUrl(path).data.publicUrl
+      }
       const payload = {
         title: post.title,
         subtitle: post.subtitle,
@@ -210,8 +265,9 @@ const [deletedDefaultIds, setDeletedDefaultIds] = useState<Set<string>>(new Set(
         delete next[id]
         return next
       })
+      showToast('Saved to showcase.')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save to showcase')
+      showToast(err instanceof Error ? err.message : 'Unable to save to showcase', 'error')
     } finally {
       setSavingShowcase(false)
     }
@@ -254,13 +310,14 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
         .select('*')
         .order('order', { ascending: true })
 
-      const showcasePosts: Post[] = (showcaseData || []).map((item: any) => ({
+const showcasePosts: Post[] = (showcaseData || []).map((item: any) => ({
         id: `showcase-${item.id}`,
         showcaseId: item.id,
         category: item.category || 'Gallery',
         title: item.title || 'Showcase',
         subtitle: item.subtitle || '',
         image: item.image_url || '',
+        badge: item.badge || '',
       }))
 
       if (!isMounted) return
@@ -345,18 +402,28 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
       if (error) throw error
       setGalleryDraft({ title: '', subtitle: '', category: 'Gallery' })
       setGalleryDraftFile(null)
+      showToast('Gallery photo added.')
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Unable to add gallery image.')
+      showToast(error instanceof Error ? error.message : 'Unable to add gallery image.', 'error')
     } finally {
       setSavingGallery(false)
     }
   }
 
-  const deleteGalleryImage = async (id?: string) => {
+  const deleteGalleryImage = (id?: string) => {
     if (!id) return
-    if (!window.confirm('Delete this gallery image?')) return
-    const { error } = await supabase.from('gallery').delete().eq('id', id)
-    if (error) alert(error.message)
+    openConfirm(
+      'Delete this gallery image?',
+      'This will permanently remove the photo from the gallery.',
+      async () => {
+        const { error } = await supabase.from('gallery').delete().eq('id', id)
+        if (error) {
+          showToast(error.message, 'error')
+          return
+        }
+        showToast('Gallery photo deleted.')
+      },
+    )
   }
 
   const saveGalleryImage = async (post: Post) => {
@@ -386,8 +453,9 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
 
       if (error) throw error
       updateGalleryEdit(post.id, { imageFile: null })
+      showToast('Gallery photo updated.')
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Unable to update gallery image.')
+      showToast(error instanceof Error ? error.message : 'Unable to update gallery image.', 'error')
     } finally {
       setUpdatingGalleryId(null)
     }
@@ -414,7 +482,11 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
       .update({ title: '', subtitle: '', category: nextEdit.category || 'Gallery' })
       .eq('id', post.galleryId)
 
-    if (error) alert(error.message)
+    if (error) {
+      showToast(error.message, 'error')
+    } else {
+      showToast('Caption cleared.')
+    }
     setUpdatingGalleryId(null)
   }
 
@@ -437,11 +509,12 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
         imageUrl = supabase.storage.from('villa-images').getPublicUrl(path).data.publicUrl
       }
 
-      const payload = {
+const payload = {
         title: showcaseDraft.title,
         subtitle: showcaseDraft.subtitle,
         category: showcaseDraft.category,
         image_url: imageUrl,
+        badge: showcaseDraft.badge || '',
         order: showcaseItems.length + 1,
       }
 
@@ -452,27 +525,38 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
       if (error) throw error
       resetShowcaseDraft()
       setShowcaseModalOpen(false)
+      showToast(editingShowcaseId ? 'Showcase item updated.' : 'Showcase item added.')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Unable to save showcase item')
+      showToast(err instanceof Error ? err.message : 'Unable to save showcase item', 'error')
     } finally {
       setSavingShowcase(false)
     }
   }
 
-  const deleteShowcase = async (id: string) => {
-    if (!window.confirm('Delete this showcase item?')) return
-    const { error } = await supabase.from('event_showcase').delete().eq('id', id)
-    if (error) alert(error.message)
+  const deleteShowcase = (id: string) => {
+    openConfirm(
+      'Delete this showcase item?',
+      'This will permanently remove the showcase item.',
+      async () => {
+        const { error } = await supabase.from('event_showcase').delete().eq('id', id)
+        if (error) {
+          showToast(error.message, 'error')
+          return
+        }
+        showToast('Showcase item deleted.')
+      },
+    )
   }
 
   const openEditShowcase = (post: Post) => {
     if (!post.showcaseId) return
     setEditingShowcaseId(post.showcaseId)
-    setShowcaseDraft({
+setShowcaseDraft({
       title: post.title,
       subtitle: post.subtitle,
       category: post.category,
       image: post.image,
+      badge: post.badge || '',
     })
     setShowcaseDraftFile(null)
   }
@@ -631,8 +715,11 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
                   </div>
 
                   <div className="slide-caption">
-                    <div className="slide-caption-inner">
-                      <span className="slide-category-tag">{post.category}</span>
+<div className="slide-caption-inner">
+                      <div className="slide-tags">
+                        <span className="slide-category-tag">{post.category}</span>
+                        {post.badge && <span className="slide-badge">{post.badge}</span>}
+                      </div>
                       {post.title && <h3 className="slide-title">{post.title}</h3>}
                       {post.subtitle && <p className="slide-subtitle">{post.subtitle}</p>}
                     </div>
@@ -763,9 +850,13 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
             <span>Subtitle / Description</span>
             <textarea rows={3} value={showcaseDraft.subtitle} onChange={(e) => setShowcaseDraft({ ...showcaseDraft, subtitle: e.target.value })} placeholder="Short description" />
           </label>
-          <label className="rates-admin-field">
+<label className="rates-admin-field">
             <span>Category</span>
             <input value={showcaseDraft.category} onChange={(e) => setShowcaseDraft({ ...showcaseDraft, category: e.target.value })} placeholder="e.g. Wedding, Birthday, Corporate" />
+          </label>
+          <label className="rates-admin-field">
+            <span>Badge (optional)</span>
+            <input value={showcaseDraft.badge || ''} onChange={(e) => setShowcaseDraft({ ...showcaseDraft, badge: e.target.value })} placeholder="e.g. Featured, Sold Out, Limited" />
           </label>
           <label className="rates-admin-field">
             <span>Image</span>
@@ -817,21 +908,13 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
             </div>
           )}
 
-          {/* ── Showcase Items Section ── */}
+{/* ── Showcase Items Section ── */}
           <div className="posts-manage-add">
             <div className="posts-manage-add__header">
               <div>
                 <span className="posts-manage-add__eyebrow">Showcase items</span>
                 <h3>{showcaseItems.length} showcase item{showcaseItems.length === 1 ? '' : 's'}</h3>
               </div>
-              <button
-                className="posts-manage-add__button"
-                type="button"
-                onClick={() => setShowcaseModalOpen(true)}
-              >
-                <Plus size={17} aria-hidden="true" />
-                Add
-              </button>
             </div>
             {showcaseItems.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -840,9 +923,9 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
                     display: 'flex', alignItems: 'center', gap: '0.75rem',
                     padding: '0.5rem', border: '1px solid rgba(0,109,119,0.12)', borderRadius: '10px'
                   }}>
-                    {post.image && (
+{post.image && (
                       <img src={post.image} alt="" style={{
-                        width: '48px', height: '48px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0
+                        width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0
                       }} />
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -868,11 +951,30 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
                     </div>
                   </div>
                 ))}
+                {/* Add button at bottom of list */}
+                <button
+                  className="posts-manage-add__button"
+                  type="button"
+                  onClick={() => setShowcaseModalOpen(true)}
+                  style={{ alignSelf: 'flex-start', marginTop: '0.5rem' }}
+                >
+                  <Plus size={17} aria-hidden="true" />
+                  Add
+                </button>
               </div>
             ) : (
               <div className="posts-manage-empty" style={{ minHeight: '80px' }}>
                 <strong>No showcase items yet</strong>
                 <span>Click "Add" to create your first showcase item.</span>
+                <button
+                  className="posts-manage-add__button"
+                  type="button"
+                  onClick={() => setShowcaseModalOpen(true)}
+                  style={{ marginTop: '0.75rem' }}
+                >
+                  <Plus size={17} aria-hidden="true" />
+                  Add
+                </button>
               </div>
             )}
           </div>
@@ -893,16 +995,34 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
                   const currentTitle = edit?.title ?? post.title
                   const currentSubtitle = edit?.subtitle ?? post.subtitle
                   const currentCategory = edit?.category ?? post.category
+                  const currentImage = edit?.image ?? post.image
                   return (
                     <div key={post.id} style={{
                       display: 'flex', gap: '0.75rem', padding: '0.75rem',
                       border: '1px solid rgba(0,109,119,0.15)', borderRadius: '10px',
                       background: 'rgba(0,109,119,0.03)'
                     }}>
-                      {post.image && (
-                        <img src={post.image} alt="" style={{
-                          width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0
-                        }} />
+                      {currentImage && (
+                        <label style={{ position: 'relative', flexShrink: 0, cursor: 'pointer', display: 'block', lineHeight: 0 }} title="Click to change image">
+                          <img src={currentImage} alt="" style={{
+                            width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0,
+                            border: edit?.imageFile ? '2px solid #FF8360' : '1px solid rgba(0,109,119,0.2)',
+                          }} />
+                          <span style={{
+                            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            borderRadius: '8px', background: 'rgba(0,0,0,0.4)', color: '#FFF', fontSize: '0.65rem', fontWeight: 700,
+                            opacity: 0, transition: 'opacity 0.15s ease', letterSpacing: '0.03em', textAlign: 'center',
+                          }}>CHANGE</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            style={{ display: 'none' }}
+                            onChange={(e) => handleDefaultImageChange(post.id, e.target.files?.[0] || null)}
+                          />
+                        </label>
+                      )}
+                      {edit?.imageFile && (
+                        <div style={{ fontSize: '0.7rem', color: '#FF8360', marginTop: '-0.35rem' }}>New image selected — Save to DB to persist</div>
                       )}
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                         <input
@@ -1127,6 +1247,20 @@ const [showcaseItems, setShowcaseItems] = useState<Post[]>([])
           )}
         </div>
       </AdminModal>
+
+{/* ── Confirm Dialog ── */}
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        variant={confirmDialog?.variant ?? 'danger'}
+        confirmLabel={confirmDialog?.confirmLabel}
+        onConfirm={async () => {
+          await confirmDialog?.onConfirm()
+          setConfirmDialog(null)
+        }}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </section>
   )
 }
