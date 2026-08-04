@@ -363,12 +363,14 @@ export function animateCounter(_currentIndex: number, _totalSlides: number) {
 }
 
 /* ----------------------------------------------------------
-   10. Initialize All Enhancements
-   Call this from your component's useEffect
+   10. Initialize All Enhancements (mount only)
+   Runs the heavy one-time initializations so existing posts'
+   animations are NOT re-triggered when new posts are added.
+   Call this from your component's mount effect.
    ---------------------------------------------------------- */
 export function initializeCarouselEnhancements(
-  currentIndex: number,
-  posts: CarouselPost[],
+  _currentIndex: number,
+  _posts: CarouselPost[],
   setIsPaused: (isPaused: boolean) => void,
 ) {
   const cleanups: Cleanup[] = []
@@ -381,10 +383,20 @@ export function initializeCarouselEnhancements(
   cleanups.push(initDotRipple())
   cleanups.push(initViewportPause(setIsPaused))
 
-  preloadAdjacentImages(currentIndex, posts)
-  animateCounter(currentIndex, posts.length)
-
   return () => cleanups.forEach((cleanup) => {
     if (typeof cleanup === 'function') cleanup()
   })
+}
+
+/* ----------------------------------------------------------
+   11. Light Per-Index Updates
+   Preloads adjacent images and animates the counter whenever
+   the active slide changes. Cheap and safe to run often.
+   ---------------------------------------------------------- */
+export function updateCarouselOnIndexChange(
+  currentIndex: number,
+  posts: CarouselPost[],
+) {
+  preloadAdjacentImages(currentIndex, posts)
+  animateCounter(currentIndex, posts.length)
 }

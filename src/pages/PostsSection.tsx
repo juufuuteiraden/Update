@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import './PostSection.css'
-import { initializeCarouselEnhancements } from '../utils/carousel.ts'
+import { initializeCarouselEnhancements, updateCarouselOnIndexChange } from '../utils/carousel.ts'
 import { supabase } from '../supabaseClient'
 import type { GalleryItem } from '../supabaseTypes'
 import { isAdminModeEnabled } from '../utils/adminMode'
@@ -161,8 +161,11 @@ export default function PostsSection() {
   const [galleryDraftFile, setGalleryDraftFile] = useState<File | null>(null)
   const [galleryEdits, setGalleryEdits] = useState<Record<string, GalleryEdit>>({})
   const [updatingGalleryId, setUpdatingGalleryId] = useState<string | null>(null)
-  const [savingGallery, setSavingGallery] = useState(false)
+const [savingGallery, setSavingGallery] = useState(false)
   const autoplayRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const viewedPostIdRef = useRef<string | null>(null)
+  const isMidTransitionRef = useRef(false)
+  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Toast + Confirm dialog ──
   const { showToast } = useToast()
@@ -561,14 +564,44 @@ setShowcaseDraft({
     setShowcaseDraftFile(null)
   }
 
-  /* ── Navigation ── */
+/* ── Navigation ── */
   const goTo = useCallback((index: number) => {
     if (isTransitioning || totalSlides === 0) return
     setIsTransitioning(true)
-    setCurrentIndex(((index % totalSlides) + totalSlides) % totalSlides)
+    const nextIndex = ((index % totalSlides) + totalSlides) % totalSlides
+    setCurrentIndex(nextIndex)
     setDragOffset(0)
-    setTimeout(() => setIsTransitioning(false), 650)
-  }, [isTransitioning, totalSlides])
+    // Track the viewed post so we can preserve it when data changes
+    const viewed = filteredPosts[nextIndex]
+    if (viewed) viewedPostIdRef.current = viewed.id
+    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current)
+    transitionTimerRef.current = setTimeout(() => {
+      setIsTransitioning(false)
+      isMidTransitionRef.current = false
+    }, 650)
+  }, [isTransitioning, totalSlides, filteredPosts])
+
+  // Ensure the viewed post ref is set whenever the current index changes (autoplay, dots, etc.)
+  useEffect(() => {
+    const viewed = filteredPosts[currentIndex]
+    if (viewed) viewedPostIdRef.current = viewed.id
+  }, [currentIndex, filteredPosts])
+
+  // Preserve the currently-viewed post when the posts list changes (e.g. a new
+  // showcase post is added), so existing posts don't jump or re-run animations.
+  useEffect(() => {
+    const viewedId = viewedPostIdRef.current
+    if (!viewedId || filteredPosts.length === 0) return
+    const newIndex = filteredPosts.findIndex((p) => p.id === viewedId)
+    if (newIndex !== -1 && newIndex !== currentIndex) {
+      setCurrentIndex(newIndex)
+      setDragOffset(0)
+    } else if (newIndex === -1 && currentIndex >= filteredPosts.length) {
+      setCurrentIndex(Math.max(0, filteredPosts.length - 1))
+      setDragOffset(0)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredPosts])
 
   const next = useCallback(() => goTo(currentIndex + 1), [currentIndex, goTo])
   const prev = useCallback(() => goTo(currentIndex - 1), [currentIndex, goTo])
@@ -593,10 +626,22 @@ setShowcaseDraft({
     }
   }, [currentIndex, goTo, totalSlides, isPaused])
 
-  // ── Carousel Enhancements ──
-  useEffect(() => {
+// ── Carousel Enhancements ──
+  // Run the heavy one-time initializations (parallax, progressive blur, swipe,
+  // keyboard hints, thumbnail autoscroll, dot ripple, viewport pause) only on
+  // mount, so existing posts' animations are NOT re-triggered when a new
+  // showcase post is added. Preloading + counter animation run per index change.
+useEffect(() => {
     const cleanup = initializeCarouselEnhancements(currentIndex, galleryPosts, setIsPaused)
     return cleanup
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Light per-index updates: preload adjacent images + animate the counter.
+  // This runs on every index change but does NOT re-trigger the heavy
+  // one-time animations on existing posts.
+  useEffect(() => {
+    updateCarouselOnIndexChange(currentIndex, galleryPosts)
   }, [currentIndex, galleryPosts])
 
   /* ── Keyboard ── */
